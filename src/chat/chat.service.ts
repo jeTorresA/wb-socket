@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MensajesChat } from 'src/entities/MensajesChat.entity';
 import { SalasChat } from 'src/entities/SalasChat.entity';
@@ -152,6 +152,11 @@ export class ChatService {
         return { type: "response", message: prueba };
     }
 
+    /**
+     * Método para actualizar los suscriptores de una sala de acuerdo con el id de la sala
+     * @param idSala string
+     * @param data '{ nombre_sala: string; suscriptores: suscriptor[] }'
+     */
     async updateSubscribers(idSala: string, data: { nombre_sala: string; suscriptores: suscriptor[] }) {
         const nuevosSuscriptores = data.suscriptores || [];
 
@@ -163,17 +168,17 @@ export class ChatService {
         const idsActuales = new Set(suscriptoresActuales.map(s => s.id_user));
         const idsNuevos = new Set(nuevosSuscriptores.map(s => s.id_user));
 
-        // 1. Identificar suscriptores a eliminar
+        // Identificar suscriptores a eliminar
         const suscriptoresAEliminar = suscriptoresActuales.filter(
             s => !idsNuevos.has(s.id_user)
         );
 
-        // 2. Identificar suscriptores a insertar
+        // Identificar suscriptores a insertar
         const suscriptoresAInsertar = nuevosSuscriptores.filter(
             s => !idsActuales.has(s.id_user)
         );
 
-        // 3. Eliminar los que ya no están
+        // Eliminar los que ya no están
         if (suscriptoresAEliminar.length > 0) {
             const queryBuilder = this.suscriptoresChats.createQueryBuilder().delete();
 
@@ -195,7 +200,7 @@ export class ChatService {
             await queryBuilder.execute();
         }
 
-        // 4. Insertar nuevos suscriptores
+        // Insertar nuevos suscriptores
         if (suscriptoresAInsertar.length > 0) {
             const nuevosRegistros = suscriptoresAInsertar.map(s => this.suscriptoresChats.create({
                 id_user: s.id_user,
@@ -209,6 +214,28 @@ export class ChatService {
             await this.suscriptoresChats.save(nuevosRegistros);
         }
 
+    }
+
+    /**
+     * Método para actualizar un sala de acuerdo con su id
+     * @param idSala string
+     * @param data SalasChat
+     * @returns 
+     */
+    async updateRoom(idSala: string, data: SalasChat) {
+        // Primero buscamos la sala
+        const sala = await this.salasSubcritas.findOne({ where: { id_sala: idSala } });
+
+        if (!sala) {
+            throw new NotFoundException(`No se encontró la sala con id: ${idSala}`);
+        }
+
+        // Actualizamos campos permitidos (sin tocar fecha_creacion)
+        if (data.nombre_sala !== undefined) sala.nombre_sala = data.nombre_sala;
+        if (data.creador !== undefined) sala.creador = data.creador;
+
+        // Guardamos los cambios
+        return await this.salasSubcritas.save(sala);
     }
 
     async createSubscriptor(data: suscriptor[]) {
