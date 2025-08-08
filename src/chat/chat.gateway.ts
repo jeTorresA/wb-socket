@@ -4,7 +4,7 @@ import { ChatService } from './chat.service';
 import path from 'path';
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
-import { mensajes, suscriptor } from './interfaces/chat/chat.interface';
+import { mensajes, salasChat, suscriptor } from './interfaces/chat/chat.interface';
 import { SuscriptoresSalasChat } from 'src/entities/SuscriptoresSalasChat.entity';
 import { UserConected } from 'src/entities/UserConected.entity';
 import { UtilitiesFunctions } from 'src/utilities/UtilitiesFunctions';
@@ -46,7 +46,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('joinRoom')
   async handleJoinRoom(client: Socket, params: { id_user: string, salasActuales: string[] }) {    
-    let salasSuscritas: suscriptor[] = [];   
+    let salasSuscritas: (suscriptor & { salas: salasChat })[] = [];   
     await this.chatService.obtenerSalasSuscritas(params.id_user, params.salasActuales).then(response => {
       salasSuscritas = response;      
 
@@ -54,8 +54,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         salasSuscritas.map(async (data) => {
           
           client.join((data.salas.nombre_sala));
-          data.mensajes = [];
-          // await this.chatService.createSala(data)        
+          data.mensajes = [];   
         })  
         client.emit('joinedRooms', salasSuscritas);
       }
@@ -71,34 +70,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }, 100);
   }
 
-  // @SubscribeMessage('createGroup')
-  // async handleCreateGroup(client: Socket, data: { nombre_sala: string, creador: string, fecha_creacion: Date, suscriptores: suscriptor[] }){
-  //   await this.chatService.createSala(data).then(res=>{
-  //     client.emit('grupoSuscrito', res);
-  //     client.emit('newSala', res);
-  //   })
-  // }
-
   @SubscribeMessage('createRoom')
-  async handleCreateSala(client: Socket, data: { nombre_sala: string, creador: string, fecha_creacion: Date, suscriptores: suscriptor[] }) {
+  async handleCreateSala(client: Socket, data: (salasChat & { suscriptores: suscriptor[] })) {
     await this.chatService.createSala(data).then(async res => {
       if (res.type === "warning") {
         client.emit('advertencia', res.message)
       } else {
-        // let sala2 = res.message;
-        let sala = (res.message as SuscriptoresSalasChat[]).filter((subs: SuscriptoresSalasChat) => (subs.id_user === data.creador));        
+        const principalSubscriber = (res.data.subscribers as SuscriptoresSalasChat[]).filter((subs: SuscriptoresSalasChat) => (subs.id_user === data.creador));
+        await this.verifyConnectedClients(res.data.tipo_sala, principalSubscriber as SuscriptoresSalasChat[]);
 
-        const principalSubscriber = (res.message as SuscriptoresSalasChat[]).filter((subs: SuscriptoresSalasChat) => (subs.id_user === data.creador));
-        await this.verifyConnectedClients(principalSubscriber as SuscriptoresSalasChat[]);
-
-        const otherSubscribers = (res.message as SuscriptoresSalasChat[]).filter((subs: SuscriptoresSalasChat) => (subs.id_user !== data.creador));
-        await this.verifyConnectedClients(otherSubscribers as SuscriptoresSalasChat[]);
+        const otherSubscribers = (res.data.subscribers as SuscriptoresSalasChat[]).filter((subs: SuscriptoresSalasChat) => (subs.id_user !== data.creador));
+        await this.verifyConnectedClients(res.data.tipo_sala, otherSubscribers as SuscriptoresSalasChat[]);
       }
     });
   }
 
   // Método para suscribir clientes de usuarios conectados a salas en las que sean agregados
-  async verifyConnectedClients(room: (suscriptor & SuscriptoresSalasChat)[]) {
+  async verifyConnectedClients(roomType: number, room: (suscriptor & SuscriptoresSalasChat)[]) {
     let userIds = [];
     let roomId = '';
 
@@ -108,16 +96,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     })    
        
     const connectedClientes = await this.chatService.searchClientsConnected(userIds);
-    this.subscribeClientsToRoom(room[0], connectedClientes)
+    this.subscribeClientsToRoom(room[0], connectedClientes, roomType)
   }
 
-  async subscribeClientsToRoom(room: SuscriptoresSalasChat, clients: UserConected[]) {    
+  async subscribeClientsToRoom(room: SuscriptoresSalasChat, clients: UserConected[], roomType: number) {    
     clients.map((client: UserConected) => {      
       if(this.isClientActive(client.client.id)) {
         const notifyClient = this.server.sockets.sockets.get(client.client.id);
         notifyClient.join(room.id_sala);
-        notifyClient.emit('newSala', room);
-        notifyClient.emit('salaSuscrita', room);
+        notifyClient.emit('newSala', {...room, tipo: roomType});
+        notifyClient.emit('salaSuscrita', {...room, tipo: roomType});
       } else {
         // Remove from client connected list
         this.chatService.removeClientConnected(client.client.id);

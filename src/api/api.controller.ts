@@ -1,4 +1,4 @@
-import { Controller, Post, Res, HttpStatus, Body, Req, Get, Query } from '@nestjs/common';
+import { Controller, Post, Res, HttpStatus, Body, Req } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { ChatGateway } from 'src/chat/chat.gateway';
 import { ChatService } from 'src/chat/chat.service';
@@ -60,12 +60,5 @@ export class ApiController {
         io.to(usuarioId).emit('requestStatus', data);
 
         return { status: 'Notificación enviada' };
-    }
-
-    // Servicos para Chat
-    @Get('subscribers')
-    async handleGetSalas(@Query('sala_id') salaId: string, @Res() res: Response) {
-        const subscribers = await this.chatService.getRoomSubscribers(salaId);
-        return res.status(200).json(subscribers);
-    }
+    }   
 }

@@ -131,25 +131,26 @@ export class ChatService {
             .getMany();
     }
 
-    async createSala(data: { nombre_sala: any, creador: any, fecha_creacion: Date, suscriptores: suscriptor[] }) {
+    async createSala(data: (salasChat & { suscriptores: suscriptor[] })) {
         const salaValidate = await this.validarSala([data.nombre_sala]).then(async res => {
             return !!res.length;
         });
         if (salaValidate) {
-            return { type: "warning", message: 'esta sala ya esta creada' };
+            return { type: "warning", message: 'esta sala ya esta creada', data: { tipo_sala: null, subscribers: [] } };
         }
-        const prueba = await this.salasSubcritas.save(data).then((resultado) => {
+        const sala = await this.salasSubcritas.save(data).then((resultado) => {
             this.idSala = resultado.id_sala
             return resultado;
         });
 
+        let dataSubs = [];
+
         if (data.suscriptores.length) {
-            const dataSubs = data.suscriptores.map((susc: suscriptor) => ({ ...susc, id_sala: this.idSala, id_suscriptor: susc.id_user, mensajes_por_leer: 0 }));
-            return { type: "response", message: await this.createSubscriptor(dataSubs) };
+            const subs = data.suscriptores.map((susc: suscriptor) => ({ ...susc, id_sala: this.idSala, id_suscriptor: susc.id_user, mensajes_por_leer: 0 }));
+            dataSubs = await this.createSubscriptor(subs);
         }
 
-
-        return { type: "response", message: prueba };
+        return { type: "response", message: 'Creación exitosa', data: { tipo_sala: sala.tipo, subscribers: dataSubs } };
     }
 
     /**
@@ -157,7 +158,7 @@ export class ChatService {
      * @param idSala string
      * @param data '{ nombre_sala: string; suscriptores: suscriptor[] }'
      */
-    async updateSubscribers(idSala: string, data: { nombre_sala: string; suscriptores: suscriptor[] }) {
+    async updateSubscribers(idSala: string, data: (salasChat & { suscriptores: suscriptor[] })) {
         const nuevosSuscriptores = data.suscriptores || [];
 
         // Obtener los suscriptores actuales de la sala
@@ -200,20 +201,26 @@ export class ChatService {
             await queryBuilder.execute();
         }
 
+        let newSubscribers: SuscriptoresSalasChat[] = [];
+
         // Insertar nuevos suscriptores
         if (suscriptoresAInsertar.length > 0) {
             const nuevosRegistros = suscriptoresAInsertar.map(s => this.suscriptoresChats.create({
                 id_user: s.id_user,
                 id_sala: idSala,
                 nombre_sala: data.nombre_sala,
-                imagen_sala: s.imagen_sala || '',
+                imagen_sala: s.imagen_sala || 'unknown.webp',
                 mensajes_por_leer: 0
                 // fecha_suscripcion se asigna automáticamente
             }));
 
-            await this.suscriptoresChats.save(nuevosRegistros);
+            newSubscribers = await this.suscriptoresChats.save(nuevosRegistros);
         }
 
+        return {
+            suscriptoresAgregados: newSubscribers,
+            suscriptoresEliminados: suscriptoresAEliminar.map(s => s.id_user)
+        }
     }
 
     /**
@@ -222,7 +229,7 @@ export class ChatService {
      * @param data SalasChat
      * @returns 
      */
-    async updateRoom(idSala: string, data: SalasChat) {
+    async updateRoom(idSala: string, data: salasChat) {
         // Primero buscamos la sala
         const sala = await this.salasSubcritas.findOne({ where: { id_sala: idSala } });
 
@@ -238,6 +245,11 @@ export class ChatService {
         return await this.salasSubcritas.save(sala);
     }
 
+    /**
+     * Permite agregar un suscriptor a una sala
+     * @param data 
+     * @returns 
+     */
     async createSubscriptor(data: suscriptor[]) {
         return await this.suscriptoresChats.save(data);
     }

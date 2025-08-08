@@ -8,10 +8,11 @@ export interface suscriptor {
     salas?: salasChat
 }
 export interface salasChat {
-    id_sala: string,
+    id_sala?: string,
     nombre_sala: string,
     creador: string,
     fecha_creacion: Date,
+    tipo?: number,
 }
 export interface suscriptor {
     id_user: string,

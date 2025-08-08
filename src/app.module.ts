@@ -9,7 +9,8 @@ import { MulterModule } from '@nestjs/platform-express';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { ApiController } from './api/api.controller';
-import { ChatGateway } from './chat/chat.gateway';
+import { dataBaseOptions } from 'db/data-source';
+import { RoomsController } from './api/rooms.controller';
 
 @Module({
   imports: [
@@ -17,14 +18,7 @@ import { ChatGateway } from './chat/chat.gateway';
     FilesModule,
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: process.env.DATABASE_HOST,
-      port: parseInt(process.env.DATABASE_PORT),
-      database: process.env.DATABASE_NAME,
-      username: process.env.DATABASE_USERNAME,
-      password: process.env.DATABASE_PASSWORD,
-      entities: [__dirname + '/entities/*.entity{.ts,.js}'],
-      migrations: [__dirname + '/migrations/*{.ts,.js}'],
+      ...dataBaseOptions,
       synchronize: process.env.NODE_ENV === 'development',
       autoLoadEntities:  process.env.NODE_ENV === 'development',
     }),
@@ -33,7 +27,7 @@ import { ChatGateway } from './chat/chat.gateway';
     }),
     ServeStaticModule.forRoot({ rootPath: join(process.cwd(), 'client'), }),
   ],
-  controllers: [AppController, ApiController],
+  controllers: [AppController, ApiController, RoomsController],
   providers: [AppService],
 })
 export class AppModule {}

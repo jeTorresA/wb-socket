@@ -14,4 +14,7 @@ export class SalasChat {
 
     @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', name: 'fecha_creacion' })
     fecha_creacion: Date;
+
+    @Column({ type: 'int', default: 1 })
+    tipo: number;
 }
