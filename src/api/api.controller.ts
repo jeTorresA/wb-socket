@@ -14,9 +14,7 @@ export class ApiController {
     async sendNotification(
         @Body() data: { notification: string, type: string, context: { user_name: string; data: any }[] },
         @Res() res: Response
-    ) {
-        console.log('DATA RECIBIDA PARA sendNotification ', data);       
-        
+    ) {        
         const userNames = data.context.map(item => (item.user_name));
 
         if(userNames.length !== 0) {
@@ -41,6 +39,7 @@ export class ApiController {
         
         return res.status(HttpStatus.ACCEPTED).json({ status: true, message: 'Las notificaciones han sido aceptadas para enviarse' });
     }
+    
     @Post('request-status')
     // sendRequestStatusNotification(@Body() data: { actual_status: string, next_status: string, all_status: string[]|null }) {
     sendRequestStatusNotification(@Req() request: Request) {

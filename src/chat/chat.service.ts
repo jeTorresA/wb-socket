@@ -55,14 +55,23 @@ export class ChatService {
     }
 
     async obtenerSalasSuscritas(id_user: string, salasActuales: string[]): Promise<SuscriptoresSalasChat[]> {
-
         if (salasActuales.length == 0) { salasActuales = [''] }
         return await this.suscriptoresChats
             .createQueryBuilder("suscripciones")
+            .leftJoinAndSelect("suscripciones.salas", "salas")
+            .leftJoin(
+                qb => qb
+                    .select("mensajes.id_sala", "id_sala")
+                    .addSelect("MAX(mensajes.fecha_creacion)", "ultima_fecha_mensaje")
+                    .from("mensajes_chat", "mensajes")
+                    .groupBy("mensajes.id_sala"),
+                "ultimoMensaje",
+                'ultimoMensaje.id_sala = suscripciones.id_sala'
+            )
             .where('suscripciones.id_user = :id_user', { id_user })
             .andWhere('suscripciones.id_sala NOT IN (:...salasActuales)', { salasActuales })
-            .orderBy('suscripciones.fecha_suscripcion', 'DESC')
-            .leftJoinAndSelect("suscripciones.salas", "salas")
+            .andWhere('suscripciones.fecha_eliminacion IS NULL')
+            .addOrderBy('ultimoMensaje.ultima_fecha_mensaje', 'DESC')
             .getMany();
     }
 
@@ -83,7 +92,11 @@ export class ChatService {
      * @returns 
      */
     async getRoomSubscribers(id_sala: string): Promise<{ id_user: string }[]> {
-        return await this.suscriptoresChats.find({ where: { id_sala: id_sala }, select: ['id_user'] });
+        return await this.suscriptoresChats.createQueryBuilder('s')
+            .select(['s.id_user AS id_user'])
+            .where('s.id_sala = :id_sala', { id_sala })
+            .andWhere('s.fecha_eliminacion IS NULL')
+            .getRawMany();
     }
 
     async createMensaje(mensaje: IMessageSaveStructure): Promise<any> {
@@ -159,67 +172,82 @@ export class ChatService {
      * @param data '{ nombre_sala: string; suscriptores: suscriptor[] }'
      */
     async updateSubscribers(idSala: string, data: (salasChat & { suscriptores: suscriptor[] })) {
-        const nuevosSuscriptores = data.suscriptores || [];
+        try {
+            const nuevosSuscriptores = data.suscriptores || [];
 
-        // Obtener los suscriptores actuales de la sala
-        const suscriptoresActuales = await this.suscriptoresChats.find({
-            where: { id_sala: idSala },
-        });
+            // Obtener los suscriptores actuales de la sala
+            const suscriptoresActuales = await this.suscriptoresChats.find({
+                where: { id_sala: idSala },
+            });
 
-        const idsActuales = new Set(suscriptoresActuales.map(s => s.id_user));
-        const idsNuevos = new Set(nuevosSuscriptores.map(s => s.id_user));
+            const idsNuevos = new Set(nuevosSuscriptores.map(s => s.id_user));
 
-        // Identificar suscriptores a eliminar
-        const suscriptoresAEliminar = suscriptoresActuales.filter(
-            s => !idsNuevos.has(s.id_user)
-        );
+            // Identificar suscriptores a eliminar (solo los activos)
+            const suscriptoresAEliminar = suscriptoresActuales.filter(
+                s => !idsNuevos.has(s.id_user) && s.fecha_eliminacion === null
+            );
 
-        // Identificar suscriptores a insertar
-        const suscriptoresAInsertar = nuevosSuscriptores.filter(
-            s => !idsActuales.has(s.id_user)
-        );
-
-        // Eliminar los que ya no están
-        if (suscriptoresAEliminar.length > 0) {
-            const queryBuilder = this.suscriptoresChats.createQueryBuilder().delete();
-
-            suscriptoresAEliminar.forEach((s, index) => {
-                const condition = `(id_user = :id_user${index} AND id_sala = :id_sala${index})`;
-                if (index === 0) {
-                    queryBuilder.where(condition, {
-                    [`id_user${index}`]: s.id_user,
-                    [`id_sala${index}`]: idSala
-                    });
-                } else {
-                    queryBuilder.orWhere(condition, {
-                    [`id_user${index}`]: s.id_user,
-                    [`id_sala${index}`]: idSala
-                    });
+            // Identificar suscriptores a insertar o restaurar
+            const suscriptoresAInsertar = [];
+            nuevosSuscriptores.forEach(s => {
+                const existente = suscriptoresActuales.find(sa => sa.id_user === s.id_user);
+                if (!existente) {
+                    suscriptoresAInsertar.push(s);
+                } else if (existente.fecha_eliminacion !== null) {
+                    // Restaurar suscriptor
+                    suscriptoresAInsertar.push({ ...s, restaurar: true });
                 }
             });
 
-            await queryBuilder.execute();
-        }
+            // Soft delete: marcar fecha_eliminacion
+            if (suscriptoresAEliminar.length > 0) {
+                const idsAEliminar = suscriptoresAEliminar.map(s => s.id_user);
+                await this.suscriptoresChats.createQueryBuilder()
+                    .update()
+                    .set({ fecha_eliminacion: () => 'CURRENT_TIMESTAMP' })
+                    .where('id_sala = :idSala', { idSala })
+                    .andWhere('id_user IN (:...idsAEliminar)', { idsAEliminar })
+                    .execute();
+            }
 
-        let newSubscribers: SuscriptoresSalasChat[] = [];
+            let newSubscribers: SuscriptoresSalasChat[] = [];
 
-        // Insertar nuevos suscriptores
-        if (suscriptoresAInsertar.length > 0) {
-            const nuevosRegistros = suscriptoresAInsertar.map(s => this.suscriptoresChats.create({
-                id_user: s.id_user,
-                id_sala: idSala,
-                nombre_sala: data.nombre_sala,
-                imagen_sala: s.imagen_sala || 'unknown.webp',
-                mensajes_por_leer: 0
-                // fecha_suscripcion se asigna automáticamente
-            }));
+            // Insertar nuevos suscriptores o restaurar
+            if (suscriptoresAInsertar.length > 0) {
+                const nuevosRegistros = suscriptoresAInsertar.filter(s => !s.restaurar).map(s => this.suscriptoresChats.create({
+                    id_user: s.id_user,
+                    id_sala: idSala,
+                    nombre_sala: data.nombre_sala,
+                    imagen_sala: s.imagen_sala || 'unknown.webp',
+                    mensajes_por_leer: 0
+                }));
+                if (nuevosRegistros.length > 0) {
+                    newSubscribers = await this.suscriptoresChats.save(nuevosRegistros);
+                }
+                // Restaurar suscriptores eliminados
+                const restaurar = suscriptoresAInsertar.filter(s => s.restaurar);
+                for (const s of restaurar) {
+                    await this.suscriptoresChats.createQueryBuilder()
+                        .update()
+                        .set({ fecha_eliminacion: null })
+                        .where('id_sala = :idSala AND id_user = :idUser', { idSala, idUser: s.id_user })
+                        .execute();
+                }
+            }
 
-            newSubscribers = await this.suscriptoresChats.save(nuevosRegistros);
-        }
-
-        return {
-            suscriptoresAgregados: newSubscribers,
-            suscriptoresEliminados: suscriptoresAEliminar.map(s => s.id_user)
+            return {
+                suscriptoresAgregados: newSubscribers,
+                suscriptoresEliminados: suscriptoresAEliminar
+            }
+        } catch (error) {
+            console.error('Error en updateSubscribers:', error.message);
+            if (error.query) {
+                console.error('SQL ejecutado:', error.query);
+            }
+            if (error.parameters) {
+                console.error('Parámetros:', error.parameters);
+            }
+            throw error; 
         }
     }
 
@@ -243,6 +271,25 @@ export class ChatService {
 
         // Guardamos los cambios
         return await this.salasSubcritas.save(sala);
+    }
+
+    /**
+     * Método para eliminar una sala de chat
+     * @param idSala string
+     */
+    async deleteRoom(idSala: string) {
+        // Primero buscamos la sala
+        const sala = await this.salasSubcritas.findOne({ where: { id_sala: idSala } });
+
+        if (!sala) {
+            throw new NotFoundException(`No se encontró la sala con id: ${idSala}`);
+        }
+
+        // Eliminamos la sala y sus suscriptores asociados
+        const suscriptores = await this.suscriptoresChats.find({ where: { id_sala: idSala } });
+        await this.suscriptoresChats.delete({ id_sala: idSala });
+        await this.salasSubcritas.delete(sala);
+        return { message: `Chat con id ${idSala} eliminado correctamente.`, suscriptores };
     }
 
     /**

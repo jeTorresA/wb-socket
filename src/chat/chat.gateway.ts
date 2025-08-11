@@ -99,6 +99,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.subscribeClientsToRoom(room[0], connectedClientes, roomType)
   }
 
+  /**
+   * Permite suscribir a los clientes a una sala de chat.
+   * Agrega el cliente a la sala y emite un evento de notificación de nueva
+   * @param room 
+   * @param clients 
+   * @param roomType 
+   */
   async subscribeClientsToRoom(room: SuscriptoresSalasChat, clients: UserConected[], roomType: number) {    
     clients.map((client: UserConected) => {      
       if(this.isClientActive(client.client.id)) {
@@ -106,6 +113,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         notifyClient.join(room.id_sala);
         notifyClient.emit('newSala', {...room, tipo: roomType});
         notifyClient.emit('salaSuscrita', {...room, tipo: roomType});
+      } else {
+        // Remove from client connected list
+        this.chatService.removeClientConnected(client.client.id);
+      }
+    });
+  }
+
+  /**
+   * Permite eliminar la suscripción de un cliente a una sala de chat.
+   * Marca la fecha de eliminación en la base de datos y emite un evento al cliente
+   * @param room 
+   * @param clients 
+   * @param roomType 
+   */
+  async unsubscribeClientsFromRoom(room: SuscriptoresSalasChat, clients: UserConected[], roomType: number) {
+    clients.map((client: UserConected) => {
+      if(this.isClientActive(client.client.id)) {
+        const notifyClient = this.server.sockets.sockets.get(client.client.id);
+        notifyClient.leave(room.id_sala);
+        notifyClient.emit('salaEliminada', {...room, tipo: roomType});
       } else {
         // Remove from client connected list
         this.chatService.removeClientConnected(client.client.id);

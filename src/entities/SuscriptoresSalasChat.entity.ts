@@ -19,8 +19,12 @@ export class SuscriptoresSalasChat {
     @Column({ type: "int" })
     mensajes_por_leer: number
 
+
     @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', name: 'fecha_suscripcion' })
     fecha_suscripcion: Date
+
+    @Column({ type: 'timestamp', nullable: true, default: () => 'NULL', name: 'fecha_eliminacion' })
+    fecha_eliminacion: Date | null;
 
     @ManyToOne(() => SalasChat, { onDelete: 'CASCADE', onUpdate: 'CASCADE' })
     @JoinColumn({ name: 'id_sala', referencedColumnName: "id_sala" })

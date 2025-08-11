@@ -4,6 +4,7 @@ export interface suscriptor {
     nombre_sala: string,
     imagen_sala: string,
     fecha_suscripcion: Date,
+    fecha_eliminacion?: Date|null,
     mensajes?: any[],
     salas?: salasChat
 }
@@ -19,7 +20,8 @@ export interface suscriptor {
     id_sala: string,
     nombre_sala: string,
     imagen_sala: string,
-    fecha_suscripcion: Date
+    fecha_suscripcion: Date,
+    fecha_eliminacion?: Date|null
 }
 export interface mensajesSalas {
     mensajes: any
