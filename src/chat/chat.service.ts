@@ -4,7 +4,7 @@ import { MensajesChat } from 'src/entities/MensajesChat.entity';
 import { SalasChat } from 'src/entities/SalasChat.entity';
 import { SuscriptoresSalasChat } from 'src/entities/SuscriptoresSalasChat.entity';
 import { UserConected } from 'src/entities/UserConected.entity';
-import { Repository } from 'typeorm';
+import { MoreThanOrEqual, Repository } from 'typeorm';
 import { IMessageSaveStructure, salasChat, suscriptor } from './interfaces/chat/chat.interface';
 
 @Injectable()
@@ -75,13 +75,32 @@ export class ChatService {
             .getMany();
     }
 
+    /**
+     * Método para obtener los mensajes de una sala de chat
+     * Pero solo los mensajes de los últimos 2 meses
+     * @param id_sala 
+     * @returns 
+     */
     async obtenerMensajesSala(id_sala: string) {
+        const twoMonthsAgo = new Date();
+        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+
         return await this.mensajesChatRepository.find({
-            where: { id_sala: id_sala }, order: {
+            where: {
+                id_sala: id_sala,
+                fecha_creacion: MoreThanOrEqual(twoMonthsAgo)
+            },
+            order: {
                 fecha_creacion: 'ASC'
             }
-        })
+        });
     }
+
+    /**
+     * Método para consultar la información de una sala de chat
+     * @param id_sala 
+     * @returns 
+     */
     async consultarInfoSala(id_sala: string) {
         return await this.salasSubcritas.find({ where: { id_sala: id_sala } })
     }
