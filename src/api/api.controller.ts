@@ -39,6 +39,30 @@ export class ApiController {
         
         return res.status(HttpStatus.ACCEPTED).json({ status: true, message: 'Las notificaciones han sido aceptadas para enviarse' });
     }
+
+    @Post('send-notification/all-users')
+    async sendNotificationAllUsers(
+        @Body() data: { notification: string, type: string, context: any },
+        @Res() res: Response
+    ) {
+        const userClients = await this.chatService.getAllClientsConnected();
+
+        if(userClients.length !== 0) {
+            userClients.forEach(client => {    
+                this.chatGateway.emitEventToClient(
+                    client,
+                    'sentNotification',
+                    {
+                        notification: data.notification,
+                        type: data.type,
+                        data: data.context ?? null
+                    }
+                );
+            })
+        }
+        
+        return res.status(HttpStatus.ACCEPTED).json({ status: true, message: 'Las notificaciones han sido aceptadas para enviarse' });
+    }
     
     @Post('request-status')
     // sendRequestStatusNotification(@Body() data: { actual_status: string, next_status: string, all_status: string[]|null }) {

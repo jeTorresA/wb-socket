@@ -40,6 +40,12 @@ export class ChatService {
         return deleted;
     }
 
+    async getAllClientsConnected() {
+        return await this.conectedUsers
+            .createQueryBuilder()
+            .getMany();
+    }
+
     async searchClientsConnected(userIds: string[]) {
         return await this.conectedUsers
             .createQueryBuilder()
