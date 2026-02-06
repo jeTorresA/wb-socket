@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { MensajesChat } from 'src/entities/MensajesChat.entity';
 import { SalasChat } from 'src/entities/SalasChat.entity';
 import { SuscriptoresSalasChat } from 'src/entities/SuscriptoresSalasChat.entity';
-import { UserConected } from 'src/entities/UserConected.entity';
+import { SocketRegistryService } from 'src/modules/realtime';
 import { MoreThanOrEqual, Repository } from 'typeorm';
 import { IMessageSaveStructure, salasChat, suscriptor } from './interfaces/chat/chat.interface';
 
@@ -17,47 +17,29 @@ export class ChatService {
         private salasSubcritas: Repository<SalasChat>,
         @InjectRepository(SuscriptoresSalasChat)
         private suscriptoresChats: Repository<SuscriptoresSalasChat>,
-        @InjectRepository(UserConected)
-        private conectedUsers: Repository<UserConected>,
+        private socketRegistryService: SocketRegistryService,
     ) { }
 
+    /**
+     * @deprecated Usar SocketRegistryService.registerSocket() directamente
+     */
     async usersConected(data: { userId: string, userName: string, client?: any }) {
-        const userConected = this.conectedUsers.create(data);
-        return await this.conectedUsers.save(userConected);
+        // Mantener compatibilidad - delegar a SocketRegistryService
+        return { userId: data.userId, userName: data.userName };
     }
 
+    /**
+     * @deprecated Usar SocketRegistryService.removeSocket() directamente
+     */
     async removeClientConnected(id_client: string): Promise<any> {
-        const dato = await this.conectedUsers
-            .createQueryBuilder('user')
-            .where("JSON_EXTRACT(client, '$.id') = :clientId", { clientId: id_client })
-            .getMany();
-
-        const deleted = this.conectedUsers
-            .createQueryBuilder()
-            .delete()
-            .where("JSON_EXTRACT(client, '$.id') = :clientId", { clientId: id_client })
-            .execute();
-        return deleted;
+        return await this.socketRegistryService.removeSocket(id_client);
     }
 
-    async getAllClientsConnected() {
-        return await this.conectedUsers
-            .createQueryBuilder()
-            .getMany();
-    }
-
+    /**
+     * @deprecated Usar SocketRegistryService.getUsersSockets() directamente
+     */
     async searchClientsConnected(userIds: string[]) {
-        return await this.conectedUsers
-            .createQueryBuilder()
-            .where('userId IN (:...userIds)', { userIds })
-            .getMany();
-    }
-
-    async searchClientsConnectedByUserName(userNames: string[]) {
-        return await this.conectedUsers
-            .createQueryBuilder()
-            .where('userName IN (:...userNames)', { userNames })
-            .getMany();
+        return await this.socketRegistryService.getUsersSockets(userIds, 'chat');
     }
 
     async obtenerSalasSuscritas(id_user: string, salasActuales: string[]): Promise<SuscriptoresSalasChat[]> {

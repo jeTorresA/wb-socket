@@ -77,13 +77,11 @@ export class RoomsController {
         try {
             const result = await this.chatService.deleteRoom(idSala);
 
-            // Notificar a los clientes conectados que la sala ha sido eliminada
+            // Notificar a TODOS los usuarios usando rooms globales
             if(result.suscriptores && result.suscriptores.length > 0) {
-                const connectedClientes = await this.chatService.searchClientsConnected(result.suscriptores.map(s => s.id_user));
-
-                connectedClientes.forEach(client => {
-                    this.chatGateway.emitEventToClient(
-                        client,
+                result.suscriptores.forEach(subscriber => {
+                    this.chatGateway.emitToUser(
+                        subscriber.id_user,
                         'salaEliminada',
                         { id_sala: idSala }
                     );

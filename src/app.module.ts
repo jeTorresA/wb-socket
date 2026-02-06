@@ -5,6 +5,8 @@ import { FilesModule } from './files/files.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { ChatModule } from './chat/chat.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { RealtimeModule } from './modules/realtime';
 import { MulterModule } from '@nestjs/platform-express';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
@@ -15,7 +17,9 @@ import { RoomsController } from './api/rooms.controller';
 @Module({
   imports: [
     ChatModule,
+    NotificationsModule,
     FilesModule,
+    RealtimeModule,
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
       ...dataBaseOptions,
