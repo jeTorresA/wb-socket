@@ -11,6 +11,9 @@ export class UserConected{
     @Column({type:"varchar", length:20})
     userName:string;
 
+    @Column({type:"varchar", length:100, nullable:true})
+    namespace:string;
+
     @Column({type:"json"})
     client:Record<string,any>
 }
