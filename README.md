@@ -71,3 +71,14 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](LICENSE).
+
+### Migraciones en la Base de datos
+El proyecto usa TypeORM con MySQL. Ya existe el script configurado:
+npm run migration:show
+Ese comando lista las migraciones que aún no se han ejecutado (pendientes) en la base de datos.
+Comandos disponibles en package.json:
+- npm run migration:show — muestra migraciones pendientes vs. ejecutadas
+- npm run migration:run — ejecuta las pendientes
+- npm run migration:revert — revierte la última
+- npm run typeorm -- migration:show — equivalente directo
+Requiere que esté configurada la conexión en db/data-source.ts y que las variables de entorno/credenciales de MySQL sean correctas.
