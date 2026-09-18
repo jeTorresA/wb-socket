@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { EventDispatcherService } from './services/event-dispatcher.service';
 import { SocketRegistryService } from './services/socket-registry.service';
 import { SocketServerProvider } from './providers/socket-server.provider';
+import { IssuerJwtService } from './services/issuer-jwt.service';
 import { EventsController } from './controllers/events.controller';
 import { UserConected } from '../../entities/UserConected.entity';
 
@@ -17,11 +18,13 @@ import { UserConected } from '../../entities/UserConected.entity';
     SocketServerProvider,
     EventDispatcherService,
     SocketRegistryService,
+    IssuerJwtService,
   ],
   exports: [
     SocketServerProvider,
     EventDispatcherService,
     SocketRegistryService,
+    IssuerJwtService,
   ],
 })
 export class RealtimeModule {}

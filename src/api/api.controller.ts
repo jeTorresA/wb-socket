@@ -12,20 +12,27 @@ export class ApiController {
 
     @Post('send-notification')
     async sendNotification(
-        @Body() data: { notification: string, type: string, context: { user_name: string; data: any }[] },
+        @Body() data: { notification: string, type: string, issuer?: string, context: { user_name: string; data: any }[] },
         @Res() res: Response
-    ) {        
+    ) {
         const userNames = data.context.map(item => item.user_name);
 
+        // Plataforma emisora: por defecto la app repotencia
+        const issuer = data.issuer ?? 'repotencia';
+
+        console.log('data', data)
+
         if(userNames.length !== 0) {
-            // Emitir usando rooms globales por userName (si se necesita)
-            // O convertir userNames a userIds y usar emitToUsers
+            // Emitir solo a la sala de cada usuario en el namespace /notifications
+            // Rooms calificadas por emisor: userName:<issuer>:<nombre>
             data.context.forEach(item => {
-                this.socketServerProvider.getServer().emit('sentNotification', {
-                    notification: data.notification,
-                    type: data.type,
-                    data: item
-                });
+                this.socketServerProvider.getNamespace('notifications')
+                    .to(`userName:${issuer}:${item.user_name}`)
+                    .emit('sentNotification', {
+                        notification: data.notification,
+                        type: data.type,
+                        data: item
+                    });
             });
         }
         
@@ -37,8 +44,8 @@ export class ApiController {
         @Body() data: { notification: string, type: string, context: any },
         @Res() res: Response
     ) {
-        // Broadcast a todos los clientes conectados
-        this.socketServerProvider.getServer().emit('sentNotification', {
+        // Broadcast a todos los clientes conectados al namespace /notifications
+        this.socketServerProvider.getNamespace('notifications').emit('sentNotification', {
             notification: data.notification,
             type: data.type,
             data: data.context ?? null

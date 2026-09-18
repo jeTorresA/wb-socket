@@ -9,7 +9,7 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { SocketServerProvider, SocketRegistryService } from 'src/modules/realtime';
+import { SocketServerProvider, SocketRegistryService, IssuerJwtService, TokenIdentity } from 'src/modules/realtime';
 
 @WebSocketGateway({ namespace: '/notifications' })
 export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
@@ -18,6 +18,7 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
   constructor(
     private readonly socketServerProvider: SocketServerProvider,
     private readonly socketRegistryService: SocketRegistryService,
+    private readonly issuerJwtService: IssuerJwtService,
   ) {}
 
   afterInit(server: Server) {
@@ -25,6 +26,9 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     if (!this.socketServerProvider.isInitialized()) {
       this.socketServerProvider.setServer(rootServer);
     }
+
+    // Validar el JWT de la plataforma emisora en el handshake (multi-emisor)
+    this.server.use(this.issuerJwtService.middleware());
   }
 
   handleConnection(client: Socket) {
@@ -41,16 +45,28 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
 
   @SubscribeMessage('userConected')
   async userConect(
-    @MessageBody('userId') userId: string,
-    @MessageBody('userName') userName: string,
     @ConnectedSocket() client: Socket,
   ) {
+    // La identidad SIEMPRE se deriva del payload firmado del token (middleware de handshake)
+    const identity: TokenIdentity | undefined = client.data?.identity;
+    if (!identity) return;
+
+    // Rooms calificadas por emisor: evitan colisiones de ids entre plataformas
+    const { userId, userName } = this.issuerJwtService.qualify(identity);
+
+    // Unir al cliente a la sala por nombre de usuario (para emisiones dirigidas por user_name)
+    const userNameRoom = `userName:${userName}`;
+    if (!client.rooms.has(userNameRoom)) {
+      client.join(userNameRoom);
+    }
+
     await this.socketRegistryService.registerSocket(
       client,
       userId,
       userName,
       'notifications',
       {
+        issuer: identity.issuer,
         handshake: client.handshake,
         rooms: Array.from(client.rooms),
         connected: client.connected,
@@ -58,7 +74,26 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     );
   }
 
+  @SubscribeMessage('eventMarkedDone')
+  async eventMarkedDone(
+    @ConnectedSocket() client: Socket,
+    @MessageBody('eventId') eventId: string | number,
+  ) {
+    const identity: TokenIdentity | undefined = client.data?.identity;
+    if (!identity) return;
+
+    console.info('EVENTO MARCADO COMO CUMPLIDO', { identity, eventId });
+
+    // Relay a todas las pestañas/dispositivos del mismo usuario (mismo emisor)
+    const { userId } = this.issuerJwtService.qualify(identity);
+    this.emitToUser(userId, 'eventMarkedDone', { eventId });
+  }
+
   emitToUser(userId: string, event: string, data: any) {
     this.server.to(`user:${userId}`).emit(event, data);
+  }
+
+  emitToUserName(userName: string, event: string, data: any) {
+    this.server.to(`userName:${userName}`).emit(event, data);
   }
 }

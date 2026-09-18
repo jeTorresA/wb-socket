@@ -2,6 +2,7 @@ export * from './realtime.module';
 export * from './dto/publish-event.dto';
 export * from './services/event-dispatcher.service';
 export * from './services/socket-registry.service';
+export * from './services/issuer-jwt.service';
 export * from './providers/socket-server.provider';
 export * from './controllers/events.controller';
 export * from './guards/service-auth.guard';

@@ -13,7 +13,7 @@ import { ChatService } from './chat.service';
 import { ChatMessagesHandler } from './handlers/chat.messages.handler';
 import { ChatRoomsHandler } from './handlers/chat.rooms.handler';
 import { ChatFilesHandler } from './handlers/chat.files.handler';
-import { SocketServerProvider, SocketRegistryService } from 'src/modules/realtime';
+import { SocketServerProvider, SocketRegistryService, IssuerJwtService, TokenIdentity } from 'src/modules/realtime';
 import { mensajes, salasChat, suscriptor } from './interfaces/chat/chat.interface';
 
 /**
@@ -31,12 +31,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     private readonly filesHandler: ChatFilesHandler,
     private readonly socketServerProvider: SocketServerProvider,
     private readonly socketRegistryService: SocketRegistryService,
+    private readonly issuerJwtService: IssuerJwtService,
   ) {}
 
   afterInit(server: Server) {
     // Obtener el servidor raíz desde el namespace
     const rootServer = (server as any).server;
     this.socketServerProvider.setServer(rootServer);
+
+    // Validar el JWT de la plataforma emisora en el handshake (multi-emisor)
+    this.server.use(this.issuerJwtService.middleware());
   }
 
   handleConnection(client: Socket, user_id: string) {
@@ -53,16 +57,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
   @SubscribeMessage('userConected')
   async userConect(
-    @MessageBody('userId') userId: string,
-    @MessageBody('userName') userName: string,
     @ConnectedSocket() client: Socket,
   ) {
+    // La identidad SIEMPRE se deriva del payload firmado del token (middleware de handshake)
+    const identity: TokenIdentity | undefined = client.data?.identity;
+    if (!identity) return;
+
+    // Ids calificados por emisor: evitan colisiones de ids entre plataformas
+    const { userId, userName } = this.issuerJwtService.qualify(identity);
+
     await this.socketRegistryService.registerSocket(
       client,
       userId,
       userName,
       'chat',
       {
+        issuer: identity.issuer,
         handshake: client.handshake,
         rooms: Array.from(client.rooms),
         connected: client.connected,
