@@ -1,0 +1,14 @@
+import { Response } from 'express';
+import { ChatGateway } from 'src/chat/chat.gateway';
+import { ChatService } from 'src/chat/chat.service';
+import { salasChat, suscriptor } from 'src/chat/interfaces/chat/chat.interface';
+export declare class RoomsController {
+    private readonly chatGateway;
+    private readonly chatService;
+    constructor(chatGateway: ChatGateway, chatService: ChatService);
+    handleGetSalas(salaId: string, res: Response): Promise<Response<any, Record<string, any>>>;
+    handlePutRoom(idSala: string, data: (salasChat & {
+        suscriptores: suscriptor[];
+    }), res: Response): Promise<Response<any, Record<string, any>>>;
+    handleDeleteRoom(idSala: string, res: Response): Promise<Response<any, Record<string, any>>>;
+}
