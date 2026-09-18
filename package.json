@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "deploy:dist": "npm run build && node scripts/deploy-dist.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "pm2 start ecosystem.config.js --env production",
     "start:pm2": "pm2 start ecosystem.config.js --env development",

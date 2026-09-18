@@ -24,8 +24,9 @@ module.exports = {
             DATABASE_PORT: 3306,
             DATABASE_USERNAME: '',
             DATABASE_PASSWORD: '',
-            DATABASE_NAME: ''
-        },        
+            DATABASE_NAME: '',
+            JWT_ISSUERS: '[{"iss":"repotencia","algo":"RS256","publicKey":"config/keys/repotencia-public.pem","idClaim":"user.id_usuario","nameClaim":"user.nombre_usuario"}]'
+        },
       },
     ],
   };

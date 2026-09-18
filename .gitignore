@@ -1,5 +1,6 @@
 # compiled output
 /dist
+/.dist-deploy
 /node_modules
 /build
 /public/uploads/*
