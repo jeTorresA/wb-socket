@@ -46,7 +46,7 @@ function cleanWorktree() {
 function copyPayload() {
   fs.cpSync(path.join(ROOT, 'dist'), WORKTREE_PATH, { recursive: true });
   fs.cpSync(path.join(ROOT, 'client'), path.join(WORKTREE_PATH, 'client'), { recursive: true });
-  for (const file of ['package.json', 'package-lock.json']) {
+  for (const file of ['package.json', 'package-lock.json', 'index.html']) {
     fs.copyFileSync(path.join(ROOT, file), path.join(WORKTREE_PATH, file));
   }
 }

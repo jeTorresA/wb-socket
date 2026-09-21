@@ -1,6 +1,7 @@
 # compiled output
 /dist
 /.dist-deploy
+/.commandcode
 /node_modules
 /build
 /public/uploads/*
