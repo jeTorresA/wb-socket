@@ -22,9 +22,16 @@ async function bootstrap() {
         credentials: true
     });
     app.useWebSocketAdapter(new platform_socket_io_1.IoAdapter(app));
-    app.enableShutdownHooks();
     await app.listen(3009);
     console.log('Listen on port ', PORT);
+    const shutdown = async (signal) => {
+        console.info(`${signal} recibido: cerrando servidor y pool de base de datos...`);
+        await app.close();
+        console.info('Servidor cerrado y pool de conexiones liberado');
+        process.exit(0);
+    };
+    process.once('SIGINT', shutdown);
+    process.once('SIGTERM', shutdown);
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

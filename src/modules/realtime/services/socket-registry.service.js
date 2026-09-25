@@ -38,9 +38,12 @@ let SocketRegistryService = class SocketRegistryService {
         return await this.userConectedRepository.save(userConected);
     }
     async removeSocket(socketId) {
-        const result = await this.userConectedRepository.delete({
-            client: { id: socketId },
-        });
+        const result = await this.userConectedRepository
+            .createQueryBuilder()
+            .delete()
+            .from(UserConected_entity_1.UserConected)
+            .where("JSON_EXTRACT(client, '$.id') = :socketId", { socketId })
+            .execute();
         return result.affected > 0;
     }
     async getUserSockets(userId, namespace) {
