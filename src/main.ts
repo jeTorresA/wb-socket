@@ -27,10 +27,19 @@ async function bootstrap() {
 
   app.useWebSocketAdapter(new IoAdapter(app));
 
-  // Hacer que esté disponible en la app
-  app.enableShutdownHooks(); // Para limpiar conexiones en apagado
-  
   await app.listen(3009);
   console.log('Listen on port ', PORT);
+
+  // Cierre ordenado: app.close() dispara onApplicationShutdown de @nestjs/typeorm,
+  // que ejecuta dataSource.destroy() -> pool.end(), liberando las conexiones a BD.
+  const shutdown = async (signal: NodeJS.Signals) => {
+    console.info(`${signal} recibido: cerrando servidor y pool de base de datos...`);
+    await app.close();
+    console.info('Servidor cerrado y pool de conexiones liberado');
+    process.exit(0);
+  };
+
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
 }
 bootstrap();

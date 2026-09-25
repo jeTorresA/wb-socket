@@ -3,7 +3,7 @@
  * Publica en la rama "dist" de origin todo lo necesario para correr en producción:
  *   - contenido de dist/ (src, db, ecosystem.config.js, ...)
  *   - client/
- *   - package.json y package-lock.json
+ *   - package.json, package-lock.json, index.html y .gitignore
  * La rama es huérfana (sin historial del repo) y cada deploy es un commit limpio.
  *
  * Uso: npm run deploy:dist   (equivale a: npm run build && node scripts/deploy-dist.js)
@@ -46,7 +46,7 @@ function cleanWorktree() {
 function copyPayload() {
   fs.cpSync(path.join(ROOT, 'dist'), WORKTREE_PATH, { recursive: true });
   fs.cpSync(path.join(ROOT, 'client'), path.join(WORKTREE_PATH, 'client'), { recursive: true });
-  for (const file of ['package.json', 'package-lock.json', 'index.html']) {
+  for (const file of ['package.json', 'package-lock.json', 'index.html', '.gitignore']) {
     fs.copyFileSync(path.join(ROOT, file), path.join(WORKTREE_PATH, file));
   }
 }

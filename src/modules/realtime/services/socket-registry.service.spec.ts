@@ -11,7 +11,6 @@ describe('SocketRegistryService', () => {
   const mockRepository = {
     create: jest.fn(),
     save: jest.fn(),
-    delete: jest.fn(),
     find: jest.fn(),
     createQueryBuilder: jest.fn(),
   };
@@ -100,17 +99,32 @@ describe('SocketRegistryService', () => {
   });
 
   describe('removeSocket', () => {
-    it('should remove socket and return true when found', async () => {
-      mockRepository.delete.mockResolvedValue({ affected: 1 } as any);
+    const buildDeleteQueryBuilder = (affected: number) => {
+      const mockQueryBuilder = {
+        delete: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected }),
+      };
+      mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder as any);
+      return mockQueryBuilder;
+    };
+
+    it('should remove socket by JSON client id and return true when found', async () => {
+      const queryBuilder = buildDeleteQueryBuilder(1);
 
       const result = await service.removeSocket('socket-123');
 
       expect(result).toBe(true);
-      expect(mockRepository.delete).toHaveBeenCalled();
+      expect(queryBuilder.where).toHaveBeenCalledWith(
+        "JSON_EXTRACT(client, '$.id') = :socketId",
+        { socketId: 'socket-123' },
+      );
+      expect(queryBuilder.execute).toHaveBeenCalled();
     });
 
     it('should return false when socket not found', async () => {
-      mockRepository.delete.mockResolvedValue({ affected: 0 } as any);
+      buildDeleteQueryBuilder(0);
 
       const result = await service.removeSocket('socket-999');
 

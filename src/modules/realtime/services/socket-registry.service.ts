@@ -48,9 +48,12 @@ export class SocketRegistryService {
    * Elimina un socket por su ID
    */
   async removeSocket(socketId: string): Promise<boolean> {
-    const result = await this.userConectedRepository.delete({
-      client: { id: socketId } as any,
-    });
+    const result = await this.userConectedRepository
+      .createQueryBuilder()
+      .delete()
+      .from(UserConected)
+      .where("JSON_EXTRACT(client, '$.id') = :socketId", { socketId })
+      .execute();
 
     return result.affected > 0;
   }
