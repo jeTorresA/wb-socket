@@ -94,6 +94,9 @@ let IssuerJwtService = class IssuerJwtService {
             userName: `${identity.issuer}:${identity.userName}`,
         };
     }
+    qualifyUserId(issuer, userId) {
+        return `${issuer}:${userId}`;
+    }
     middleware() {
         return (client, next) => {
             const token = client.handshake.auth?.token ||

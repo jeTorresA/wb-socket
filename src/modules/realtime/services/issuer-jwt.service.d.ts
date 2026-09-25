@@ -21,5 +21,6 @@ export declare class IssuerJwtService implements OnModuleInit {
         userId: string;
         userName: string;
     };
+    qualifyUserId(issuer: string, userId: string): string;
     middleware(): (client: Socket, next: (err?: Error) => void) => void;
 }

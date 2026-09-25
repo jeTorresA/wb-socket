@@ -27,6 +27,7 @@ export declare class ChatService {
     getRoomSubscribers(id_sala: string): Promise<{
         id_user: string;
     }[]>;
+    getActiveSubscribers(id_sala: string): Promise<SuscriptoresSalasChat[]>;
     createMensaje(mensaje: IMessageSaveStructure): Promise<any>;
     updateMessagesToRead(id_sala: string, id_user: string): Promise<any>;
     updateMessagesAsRead(roomId: string, subscriberId: string): Promise<any>;
@@ -42,6 +43,7 @@ export declare class ChatService {
             subscribers: any[];
         };
     }>;
+    private ensureSubscribers;
     updateSubscribers(idSala: string, data: (salasChat & {
         suscriptores: suscriptor[];
     })): Promise<{

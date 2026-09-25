@@ -16,11 +16,11 @@ let SuscriptoresSalasChat = class SuscriptoresSalasChat {
 };
 exports.SuscriptoresSalasChat = SuscriptoresSalasChat;
 __decorate([
-    (0, typeorm_1.PrimaryColumn)({ type: 'varchar', length: 20 }),
+    (0, typeorm_1.PrimaryColumn)({ type: 'varchar', length: 100 }),
     __metadata("design:type", String)
 ], SuscriptoresSalasChat.prototype, "id_user", void 0);
 __decorate([
-    (0, typeorm_1.PrimaryColumn)({ type: "uuid", nullable: false }),
+    (0, typeorm_1.PrimaryColumn)({ type: 'varchar', length: 36, nullable: false }),
     __metadata("design:type", String)
 ], SuscriptoresSalasChat.prototype, "id_sala", void 0);
 __decorate([

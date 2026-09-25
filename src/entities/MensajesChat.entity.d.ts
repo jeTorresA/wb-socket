@@ -1,5 +1,4 @@
 import { SalasChat } from "./SalasChat.entity";
-import { SuscriptoresSalasChat } from "./SuscriptoresSalasChat.entity";
 export declare class MensajesChat {
     id: string;
     id_sala: string;
@@ -8,6 +7,5 @@ export declare class MensajesChat {
     id_user: string;
     userName: string;
     fecha_creacion: Date;
-    suscrip: SuscriptoresSalasChat;
     salas: SalasChat;
 }

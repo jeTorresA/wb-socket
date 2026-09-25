@@ -12,7 +12,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MensajesChat = void 0;
 const typeorm_1 = require("typeorm");
 const SalasChat_entity_1 = require("./SalasChat.entity");
-const SuscriptoresSalasChat_entity_1 = require("./SuscriptoresSalasChat.entity");
 let MensajesChat = class MensajesChat {
 };
 exports.MensajesChat = MensajesChat;
@@ -21,7 +20,7 @@ __decorate([
     __metadata("design:type", String)
 ], MensajesChat.prototype, "id", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: "varchar", length: 50, nullable: false }),
+    (0, typeorm_1.Column)({ type: "varchar", length: 36, nullable: false }),
     __metadata("design:type", String)
 ], MensajesChat.prototype, "id_sala", void 0);
 __decorate([
@@ -33,22 +32,17 @@ __decorate([
     __metadata("design:type", Object)
 ], MensajesChat.prototype, "archivos", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: "uuid", nullable: false }),
+    (0, typeorm_1.Column)({ type: "varchar", length: 100, nullable: false }),
     __metadata("design:type", String)
 ], MensajesChat.prototype, "id_user", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: "varchar", length: 50 }),
+    (0, typeorm_1.Column)({ type: "varchar", length: 100 }),
     __metadata("design:type", String)
 ], MensajesChat.prototype, "userName", void 0);
 __decorate([
     (0, typeorm_1.Column)({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', name: 'fecha_creacion' }),
     __metadata("design:type", Date)
 ], MensajesChat.prototype, "fecha_creacion", void 0);
-__decorate([
-    (0, typeorm_1.ManyToOne)(() => SuscriptoresSalasChat_entity_1.SuscriptoresSalasChat, { onDelete: 'CASCADE', onUpdate: 'CASCADE' }),
-    (0, typeorm_1.JoinColumn)({ name: 'id_user', referencedColumnName: "id_user" }),
-    __metadata("design:type", SuscriptoresSalasChat_entity_1.SuscriptoresSalasChat)
-], MensajesChat.prototype, "suscrip", void 0);
 __decorate([
     (0, typeorm_1.ManyToOne)(() => SalasChat_entity_1.SalasChat, { onDelete: 'CASCADE', onUpdate: 'CASCADE' }),
     (0, typeorm_1.JoinColumn)({ name: 'id_sala', referencedColumnName: 'id_sala' }),

@@ -68,13 +68,13 @@ let ChatGateway = class ChatGateway {
         }, 100);
     }
     async handleCreateSala(client, data) {
-        await this.roomsHandler.handleCreateRoom(this.server, client, data);
+        await this.roomsHandler.handleCreateRoom(this.server, client, data, client.data?.identity);
     }
     async handleMessage(client, data) {
-        await this.messagesHandler.handleSendMessage(this.server, data);
+        await this.messagesHandler.handleSendMessage(this.server, data, client.data?.identity);
     }
     async handleSetMessagesAsRead(client, data) {
-        await this.messagesHandler.handleSetMessagesAsRead(this.server, data);
+        await this.messagesHandler.handleSetMessagesAsRead(this.server, data, client.data?.identity);
     }
     async handleGetFile(data, client) {
         await this.filesHandler.handleGetFile(client, data);

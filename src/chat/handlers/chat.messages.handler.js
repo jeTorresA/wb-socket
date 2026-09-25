@@ -12,28 +12,39 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatMessagesHandler = void 0;
 const common_1 = require("@nestjs/common");
 const chat_service_1 = require("../chat.service");
+const realtime_1 = require("../../modules/realtime");
 let ChatMessagesHandler = class ChatMessagesHandler {
-    constructor(chatService) {
+    constructor(chatService, issuerJwtService) {
         this.chatService = chatService;
+        this.issuerJwtService = issuerJwtService;
     }
-    async handleSendMessage(server, data) {
+    async handleSendMessage(server, data, identity) {
         const message = await this.chatService.createMensaje(data);
         await this.chatService.updateMessagesToRead(data.id_sala, data.id_user);
-        server.to(`user:${data.id_user}`).emit('sentMessage', message);
+        const issuer = identity?.issuer;
+        if (!issuer) {
+            console.warn('MENSAJE SIN IDENTIDAD: no fue posible notificar en tiempo real', { id_sala: data.id_sala });
+            return message;
+        }
+        const senderRoom = `user:${this.issuerJwtService.qualifyUserId(issuer, data.id_user)}`;
+        server.to(senderRoom).emit('sentMessage', message);
         const roomSubscribers = await this.chatService.getRoomSubscribers(data.id_sala);
         const subscribersToNotify = roomSubscribers
             .filter(sub => sub.id_user !== data.id_user)
             .map(sub => sub.id_user);
-        if (subscribersToNotify.length > 0) {
-            subscribersToNotify.forEach(userId => {
-                server.to(`user:${userId}`).emit('newMessage', message);
-            });
-        }
+        subscribersToNotify.forEach(userId => {
+            const subscriberRoom = `user:${this.issuerJwtService.qualifyUserId(issuer, userId)}`;
+            server.to(subscriberRoom).emit('newMessage', message);
+        });
         return message;
     }
-    async handleSetMessagesAsRead(server, data) {
+    async handleSetMessagesAsRead(server, data, identity) {
         await this.chatService.updateMessagesAsRead(data.id_sala, data.id_user);
-        server.to(`user:${data.id_user}`).emit('messagesRead', data);
+        const issuer = identity?.issuer;
+        if (!issuer)
+            return;
+        const userRoom = `user:${this.issuerJwtService.qualifyUserId(issuer, data.id_user)}`;
+        server.to(userRoom).emit('messagesRead', data);
     }
     async handleJoinMessages(client, id_sala) {
         const messages = await this.chatService.obtenerMensajesSala(id_sala);
@@ -43,6 +54,7 @@ let ChatMessagesHandler = class ChatMessagesHandler {
 exports.ChatMessagesHandler = ChatMessagesHandler;
 exports.ChatMessagesHandler = ChatMessagesHandler = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [chat_service_1.ChatService])
+    __metadata("design:paramtypes", [chat_service_1.ChatService,
+        realtime_1.IssuerJwtService])
 ], ChatMessagesHandler);
 //# sourceMappingURL=chat.messages.handler.js.map

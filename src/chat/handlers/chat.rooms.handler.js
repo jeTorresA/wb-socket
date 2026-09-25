@@ -14,9 +14,10 @@ const common_1 = require("@nestjs/common");
 const chat_service_1 = require("../chat.service");
 const realtime_1 = require("../../modules/realtime");
 let ChatRoomsHandler = class ChatRoomsHandler {
-    constructor(chatService, socketRegistryService) {
+    constructor(chatService, socketRegistryService, issuerJwtService) {
         this.chatService = chatService;
         this.socketRegistryService = socketRegistryService;
+        this.issuerJwtService = issuerJwtService;
     }
     async handleJoinRoom(client, params) {
         const salasSuscritas = await this.chatService.obtenerSalasSuscritas(params.id_user, params.salasActuales);
@@ -28,7 +29,7 @@ let ChatRoomsHandler = class ChatRoomsHandler {
             client.emit('joinedRooms', salasSuscritas);
         }
     }
-    async handleCreateRoom(server, client, data) {
+    async handleCreateRoom(server, client, data, identity) {
         const result = await this.chatService.createSala(data);
         if (result.type === 'warning') {
             client.emit('advertencia', result.message);
@@ -37,17 +38,20 @@ let ChatRoomsHandler = class ChatRoomsHandler {
         const subscribers = result.data.subscribers;
         const principalSubscriber = subscribers.filter(sub => sub.id_user === data.creador);
         const otherSubscribers = subscribers.filter(sub => sub.id_user !== data.creador);
-        await this.subscribeClients(server, result.data.tipo_sala, principalSubscriber);
-        await this.subscribeClients(server, result.data.tipo_sala, otherSubscribers);
+        await this.subscribeClients(server, result.data.tipo_sala, principalSubscriber, identity);
+        await this.subscribeClients(server, result.data.tipo_sala, otherSubscribers, identity);
     }
-    async subscribeClients(server, roomType, subscribers) {
+    async subscribeClients(server, roomType, subscribers, identity) {
         if (subscribers.length === 0)
             return;
+        const issuer = identity?.issuer ?? 'repotencia';
         const userIds = subscribers.map(sub => sub.id_user);
-        const connectedClients = await this.socketRegistryService.getUsersSockets(userIds, 'chat');
+        const qualifiedUserIds = userIds.map(userId => this.issuerJwtService.qualifyUserId(issuer, userId));
+        const connectedClients = await this.socketRegistryService.getUsersSockets(qualifiedUserIds, 'chat');
         this.subscribeClientsToRoom(server, subscribers[0], connectedClients, roomType);
-        userIds.forEach(userId => {
-            server.to(`user:${userId}`).emit('newSala', { ...subscribers[0], tipo: roomType });
+        subscribers.forEach(sub => {
+            const userRoom = `user:${this.issuerJwtService.qualifyUserId(issuer, sub.id_user)}`;
+            server.to(userRoom).emit('newSala', { ...sub, tipo: roomType });
         });
     }
     subscribeClientsToRoom(server, room, clients, roomType) {
@@ -79,6 +83,7 @@ exports.ChatRoomsHandler = ChatRoomsHandler;
 exports.ChatRoomsHandler = ChatRoomsHandler = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [chat_service_1.ChatService,
-        realtime_1.SocketRegistryService])
+        realtime_1.SocketRegistryService,
+        realtime_1.IssuerJwtService])
 ], ChatRoomsHandler);
 //# sourceMappingURL=chat.rooms.handler.js.map

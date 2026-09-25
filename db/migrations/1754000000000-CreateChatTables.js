@@ -15,7 +15,7 @@ class CreateChatTables1754000000000 {
             indices: [
                 { name: "IDX_52d6de74024c843bd7c0ce7b94", columnNames: ["nombre_sala"], isUnique: true },
             ],
-        }));
+        }), true);
         await queryRunner.createTable(new typeorm_1.Table({
             name: "user_conected",
             columns: [
@@ -24,7 +24,7 @@ class CreateChatTables1754000000000 {
                 { name: "userName", type: "varchar", length: "20", isNullable: false },
                 { name: "client", type: "json", isNullable: false },
             ],
-        }));
+        }), true);
         await queryRunner.createTable(new typeorm_1.Table({
             name: "suscriptores_salas_chat",
             columns: [
@@ -45,7 +45,7 @@ class CreateChatTables1754000000000 {
                     onUpdate: "CASCADE",
                 },
             ],
-        }));
+        }), true);
         await queryRunner.createTable(new typeorm_1.Table({
             name: "mensajes_chat",
             columns: [
@@ -80,7 +80,7 @@ class CreateChatTables1754000000000 {
                     onUpdate: "CASCADE",
                 },
             ],
-        }));
+        }), true);
         await queryRunner.createTable(new typeorm_1.Table({
             name: "archivos_chat",
             columns: [
@@ -103,7 +103,7 @@ class CreateChatTables1754000000000 {
                     onUpdate: "CASCADE",
                 },
             ],
-        }));
+        }), true);
     }
     async down(queryRunner) {
         await queryRunner.dropTable("archivos_chat", true);

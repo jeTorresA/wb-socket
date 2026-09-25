@@ -32,8 +32,13 @@ let FilesController = class FilesController {
                     message: 'Faltan parámetros en la solicitud.',
                 });
             }
-            const folderPath = path.join(process.cwd(), 'public', location);
-            const filePath = path.join(folderPath, fileName);
+            const filePath = this.resolvePublicPath(location, fileName);
+            if (!filePath) {
+                return res.status(common_1.HttpStatus.BAD_REQUEST).json({
+                    status: false,
+                    message: 'Ruta de archivo inválida.',
+                });
+            }
             if (fs.existsSync(filePath)) {
                 res.set({
                     'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -59,8 +64,8 @@ let FilesController = class FilesController {
     }
     getFileStream(directory, filename, res) {
         try {
-            const filePath = path.join(process.cwd(), 'public', directory, filename);
-            if (!fs.existsSync(filePath)) {
+            const filePath = this.resolvePublicPath(directory, filename);
+            if (!filePath || !fs.existsSync(filePath)) {
                 throw new common_1.NotFoundException('El archivo no existe.');
             }
             const fileStream = fs.createReadStream(filePath);
@@ -80,8 +85,8 @@ let FilesController = class FilesController {
     }
     async getFileAsBlob(directory, filename, res) {
         try {
-            const filePath = path.join(process.cwd(), 'public', directory, filename);
-            if (!fs.existsSync(filePath)) {
+            const filePath = this.resolvePublicPath(directory, filename);
+            if (!filePath || !fs.existsSync(filePath)) {
                 throw new common_1.NotFoundException('El archivo no existe.');
             }
             const fileBuffer = fs.readFileSync(filePath);
@@ -113,8 +118,8 @@ let FilesController = class FilesController {
                     message: 'Faltan parámetros en la solicitud.',
                 });
             }
-            const filePath = path.join(process.cwd(), 'public', location, fileName);
-            if (!fs.existsSync(filePath)) {
+            const filePath = this.resolvePublicPath(location, fileName);
+            if (!filePath || !fs.existsSync(filePath)) {
                 throw new common_1.NotFoundException('El archivo no existe.');
             }
             const fileBuffer = fs.readFileSync(filePath);
@@ -138,6 +143,14 @@ let FilesController = class FilesController {
                 throw new common_1.InternalServerErrorException('Ocurrió un error al intentar acceder al archivo');
             }
         }
+    }
+    resolvePublicPath(location, fileName) {
+        const publicDir = path.resolve(process.cwd(), 'public');
+        const filePath = path.resolve(publicDir, location ?? '', fileName ?? '');
+        if (filePath === publicDir || filePath.startsWith(publicDir + path.sep)) {
+            return filePath;
+        }
+        return null;
     }
     getMimeType(filename) {
         const ext = path.extname(filename).toLowerCase();

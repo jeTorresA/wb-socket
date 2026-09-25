@@ -16,36 +16,40 @@ exports.RoomsController = void 0;
 const common_1 = require("@nestjs/common");
 const chat_gateway_1 = require("../chat/chat.gateway");
 const chat_service_1 = require("../chat/chat.service");
+const realtime_1 = require("../modules/realtime");
 let RoomsController = class RoomsController {
-    constructor(chatGateway, chatService) {
+    constructor(chatGateway, chatService, issuerJwtService) {
         this.chatGateway = chatGateway;
         this.chatService = chatService;
+        this.issuerJwtService = issuerJwtService;
     }
     async handleGetSalas(salaId, res) {
         const subscribers = await this.chatService.getRoomSubscribers(salaId);
         return res.status(common_1.HttpStatus.OK).json(subscribers);
     }
     async handlePutRoom(idSala, data, res) {
+        if (data.nombre_sala) {
+            const [roomWithName] = await this.chatService.validarSala([data.nombre_sala]);
+            if (roomWithName && roomWithName.id_sala !== idSala) {
+                return res.status(common_1.HttpStatus.CONFLICT).json({ message: 'Ya existe un chat con ese nombre.' });
+            }
+        }
         const result = await this.chatService.updateSubscribers(idSala, data);
         const sala = data;
         delete sala.suscriptores;
         const _sala = sala;
         const updatedRoom = await this.chatService.updateRoom(idSala, _sala);
-        const suscriptoresAgregados = result.suscriptoresAgregados.map(s => s.id_user);
-        if (suscriptoresAgregados.length > 0) {
-            const connectedClientes = await this.chatService.searchClientsConnected(suscriptoresAgregados);
-            connectedClientes.forEach(client => {
-                const subscriber = result.suscriptoresAgregados.find(s => s.id_user === client.userId);
-                this.chatGateway.subscribeClientsToRoom(subscriber, connectedClientes, updatedRoom.tipo);
-            });
+        const issuer = 'repotencia';
+        const qualify = (id_user) => this.issuerJwtService.qualifyUserId(issuer, id_user);
+        const activeSubscribers = await this.chatService.getActiveSubscribers(idSala);
+        if (activeSubscribers.length > 0) {
+            await this.chatGateway.verifyConnectedClients(updatedRoom.tipo, activeSubscribers);
         }
         if (result.suscriptoresEliminados.length > 0) {
-            const suscriptoresEliminados = result.suscriptoresEliminados.map(s => s.id_user);
-            const connectedClientes = await this.chatService.searchClientsConnected(suscriptoresEliminados);
-            connectedClientes.forEach(client => {
-                const subscriber = result.suscriptoresEliminados.find(s => s.id_user === client.userId);
-                this.chatGateway.unsubscribeClientsFromRoom(subscriber, connectedClientes, updatedRoom.tipo);
-            });
+            const connectedClientes = await this.chatService.searchClientsConnected(result.suscriptoresEliminados.map(s => qualify(s.id_user)));
+            if (connectedClientes.length > 0) {
+                this.chatGateway.unsubscribeClientsFromRoom(result.suscriptoresEliminados[0], connectedClientes, updatedRoom.tipo);
+            }
         }
         return res.status(common_1.HttpStatus.OK).json('Chat y suscriptores actualizados con éxito.');
     }
@@ -54,7 +58,7 @@ let RoomsController = class RoomsController {
             const result = await this.chatService.deleteRoom(idSala);
             if (result.suscriptores && result.suscriptores.length > 0) {
                 result.suscriptores.forEach(subscriber => {
-                    this.chatGateway.emitToUser(subscriber.id_user, 'salaEliminada', { id_sala: idSala });
+                    this.chatGateway.emitToUser(this.issuerJwtService.qualifyUserId('repotencia', subscriber.id_user), 'salaEliminada', { id_sala: idSala });
                 });
             }
             return res.status(common_1.HttpStatus.OK).json({
@@ -98,6 +102,7 @@ __decorate([
 exports.RoomsController = RoomsController = __decorate([
     (0, common_1.Controller)('api/room'),
     __metadata("design:paramtypes", [chat_gateway_1.ChatGateway,
-        chat_service_1.ChatService])
+        chat_service_1.ChatService,
+        realtime_1.IssuerJwtService])
 ], RoomsController);
 //# sourceMappingURL=rooms.controller.js.map

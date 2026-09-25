@@ -77,6 +77,11 @@ let ChatService = class ChatService {
             .andWhere('s.fecha_eliminacion IS NULL')
             .getRawMany();
     }
+    async getActiveSubscribers(id_sala) {
+        return await this.suscriptoresChats.find({
+            where: { id_sala, fecha_eliminacion: (0, typeorm_2.IsNull)() },
+        });
+    }
     async createMensaje(mensaje) {
         const message = await this.mensajesChatRepository.save(mensaje);
         return message;
@@ -119,10 +124,13 @@ let ChatService = class ChatService {
             .getMany();
     }
     async createSala(data) {
-        const salaValidate = await this.validarSala([data.nombre_sala]).then(async (res) => {
-            return !!res.length;
-        });
-        if (salaValidate) {
+        const [existingRoom] = await this.validarSala([data.nombre_sala]);
+        const isGroup = data.tipo === 2;
+        if (existingRoom && !isGroup && existingRoom.tipo !== 2) {
+            const subscribers = await this.ensureSubscribers(existingRoom.id_sala, data.nombre_sala, data.suscriptores);
+            return { type: "response", message: 'Sala existente reutilizada', data: { tipo_sala: existingRoom.tipo, subscribers } };
+        }
+        if (existingRoom) {
             return { type: "warning", message: 'esta sala ya esta creada', data: { tipo_sala: null, subscribers: [] } };
         }
         const sala = await this.salasSubcritas.save(data).then((resultado) => {
@@ -135,6 +143,32 @@ let ChatService = class ChatService {
             dataSubs = await this.createSubscriptor(subs);
         }
         return { type: "response", message: 'Creación exitosa', data: { tipo_sala: sala.tipo, subscribers: dataSubs } };
+    }
+    async ensureSubscribers(id_sala, nombre_sala, subscribers = []) {
+        const result = [];
+        for (const susc of subscribers) {
+            const existente = await this.suscriptoresChats.findOne({ where: { id_sala, id_user: susc.id_user } });
+            if (existente) {
+                if (existente.fecha_eliminacion) {
+                    await this.suscriptoresChats.createQueryBuilder()
+                        .update()
+                        .set({ fecha_eliminacion: () => 'NULL' })
+                        .where('id_sala = :id_sala AND id_user = :id_user', { id_sala, id_user: susc.id_user })
+                        .execute();
+                    existente.fecha_eliminacion = null;
+                }
+                result.push(existente);
+                continue;
+            }
+            result.push(await this.suscriptoresChats.save(this.suscriptoresChats.create({
+                id_user: susc.id_user,
+                id_sala,
+                nombre_sala: susc.nombre_sala || nombre_sala,
+                imagen_sala: susc.imagen_sala || 'unknown.webp',
+                mensajes_por_leer: 0,
+            })));
+        }
+        return result;
     }
     async updateSubscribers(idSala, data) {
         try {
@@ -183,6 +217,14 @@ let ChatService = class ChatService {
                         .where('id_sala = :idSala AND id_user = :idUser', { idSala, idUser: s.id_user })
                         .execute();
                 }
+            }
+            if (data.nombre_sala) {
+                await this.suscriptoresChats.createQueryBuilder()
+                    .update()
+                    .set({ nombre_sala: data.nombre_sala })
+                    .where('id_sala = :idSala', { idSala })
+                    .andWhere('fecha_eliminacion IS NULL')
+                    .execute();
             }
             return {
                 suscriptoresAgregados: newSubscribers,

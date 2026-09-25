@@ -23,7 +23,7 @@ __decorate([
     __metadata("design:type", String)
 ], SalasChat.prototype, "nombre_sala", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ length: 20 }),
+    (0, typeorm_1.Column)({ type: 'varchar', length: 100 }),
     __metadata("design:type", String)
 ], SalasChat.prototype, "creador", void 0);
 __decorate([
