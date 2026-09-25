@@ -2,13 +2,15 @@ import { Controller, Post, Res, HttpStatus, Body, Req, Get, Query, Put, Param, D
 import { Request, Response } from 'express';
 import { ChatGateway } from 'src/chat/chat.gateway';
 import { ChatService } from 'src/chat/chat.service';
+import { IssuerJwtService } from 'src/modules/realtime';
 import { salasChat, suscriptor } from 'src/chat/interfaces/chat/chat.interface';
 
 @Controller('api/room')
 export class RoomsController {
     constructor (
         private readonly chatGateway: ChatGateway,
-        private readonly chatService: ChatService
+        private readonly chatService: ChatService,
+        private readonly issuerJwtService: IssuerJwtService,
     ) {}
 
     @Get(':id/subscribers')
@@ -23,6 +25,14 @@ export class RoomsController {
         @Body() data: (salasChat & { suscriptores: suscriptor[] }),
         @Res() res: Response
     ) {
+        // Validar antes de aplicar cambios: el nombre de la sala es único
+        if (data.nombre_sala) {
+            const [roomWithName] = await this.chatService.validarSala([data.nombre_sala]);
+            if (roomWithName && roomWithName.id_sala !== idSala) {
+                return res.status(HttpStatus.CONFLICT).json({ message: 'Ya existe un chat con ese nombre.' });
+            }
+        }
+
         const result = await this.chatService.updateSubscribers(idSala, data);
 
         const sala = data;
@@ -31,39 +41,26 @@ export class RoomsController {
 
         const updatedRoom = await this.chatService.updateRoom(idSala, _sala);
 
-        // Extraer el listado de id_user
-        const suscriptoresAgregados = result.suscriptoresAgregados.map(s => s.id_user);
+        // Los id_user del chat son crudos; se califican para emitir a las rooms globales
+        const issuer = 'repotencia';
+        const qualify = (id_user: string) => this.issuerJwtService.qualifyUserId(issuer, id_user);
 
-        // Si hay suscriptores agregados, enviar notificación
-        if(suscriptoresAgregados.length > 0) {
-            // Buscar si los usuarios están conectados al chat
-            const connectedClientes = await this.chatService.searchClientsConnected(suscriptoresAgregados);
-
-            // Notificar solo a los usuarios que tienen cliente conectado
-            connectedClientes.forEach(client => {
-                const subscriber = result.suscriptoresAgregados.find(s => s.id_user === client.userId);
-    
-                // Notificar suscipción al chat
-                this.chatGateway.subscribeClientsToRoom(subscriber, connectedClientes, updatedRoom.tipo)
-            });
+        // Notificar a TODOS los suscriptores activos (agregados y existentes): así los
+        // nuevos miembros ven la sala y los actuales reciben el nombre actualizado
+        const activeSubscribers = await this.chatService.getActiveSubscribers(idSala);
+        if (activeSubscribers.length > 0) {
+            await this.chatGateway.verifyConnectedClients(updatedRoom.tipo, activeSubscribers);
         }
 
-        // Si hay suscriptores eliminados, notificar a los usuarios conectados
-        // Solo si hay suscriptores eliminados
-        if(result.suscriptoresEliminados.length > 0) {
-            //  Extraer el listado de id_user de los suscriptores eliminados
-            const suscriptoresEliminados = result.suscriptoresEliminados.map(s => s.id_user);
+        // Suscriptores eliminados: notificar una sola vez con todos sus clientes conectados
+        if (result.suscriptoresEliminados.length > 0) {
+            const connectedClientes = await this.chatService.searchClientsConnected(
+                result.suscriptoresEliminados.map(s => qualify(s.id_user))
+            );
 
-            // Buscar si los usuarios están conectados al chat
-            const connectedClientes = await this.chatService.searchClientsConnected(suscriptoresEliminados);
-
-            // Notificar solo a los usuarios que tienen cliente conectado
-            connectedClientes.forEach(client => {
-                const subscriber = result.suscriptoresEliminados.find(s => s.id_user === client.userId);
-    
-                // Notificar eliminación de suscripción al chat
-                this.chatGateway.unsubscribeClientsFromRoom(subscriber, connectedClientes, updatedRoom.tipo)
-            });
+            if (connectedClientes.length > 0) {
+                this.chatGateway.unsubscribeClientsFromRoom(result.suscriptoresEliminados[0], connectedClientes, updatedRoom.tipo);
+            }
         }
 
         return res.status(HttpStatus.OK).json('Chat y suscriptores actualizados con éxito.');
@@ -77,11 +74,11 @@ export class RoomsController {
         try {
             const result = await this.chatService.deleteRoom(idSala);
 
-            // Notificar a TODOS los usuarios usando rooms globales
+            // Notificar a TODOS los usuarios usando rooms globales (ids calificados por emisor)
             if(result.suscriptores && result.suscriptores.length > 0) {
                 result.suscriptores.forEach(subscriber => {
                     this.chatGateway.emitToUser(
-                        subscriber.id_user,
+                        this.issuerJwtService.qualifyUserId('repotencia', subscriber.id_user),
                         'salaEliminada',
                         { id_sala: idSala }
                     );

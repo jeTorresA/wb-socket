@@ -4,10 +4,10 @@ import { SalasChat } from "./SalasChat.entity"
 @Entity({name:'suscriptores_salas_chat'})
 export class SuscriptoresSalasChat {
 
-    @PrimaryColumn({ type:'varchar', length: 20 })
+    @PrimaryColumn({ type: 'varchar', length: 100 })
     id_user: string
 
-    @PrimaryColumn({ type: "uuid", nullable: false })
+    @PrimaryColumn({ type: 'varchar', length: 36, nullable: false })
     id_sala: string
 
     @Column({ type: "varchar", length: 100 })

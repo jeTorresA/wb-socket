@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { ChatService } from '../chat.service';
-import { SocketRegistryService } from 'src/modules/realtime';
+import { IssuerJwtService, SocketRegistryService, TokenIdentity } from 'src/modules/realtime';
 import { SuscriptoresSalasChat } from 'src/entities/SuscriptoresSalasChat.entity';
 import { salasChat, suscriptor } from '../interfaces/chat/chat.interface';
 
@@ -13,6 +13,7 @@ export class ChatRoomsHandler {
   constructor(
     private readonly chatService: ChatService,
     private readonly socketRegistryService: SocketRegistryService,
+    private readonly issuerJwtService: IssuerJwtService,
   ) {}
 
   async handleJoinRoom(client: Socket, params: { id_user: string; salasActuales: string[] }) {
@@ -34,6 +35,7 @@ export class ChatRoomsHandler {
     server: Server,
     client: Socket,
     data: salasChat & { suscriptores: suscriptor[] },
+    identity?: TokenIdentity,
   ) {
     const result = await this.chatService.createSala(data);
 
@@ -46,21 +48,30 @@ export class ChatRoomsHandler {
     const principalSubscriber = subscribers.filter(sub => sub.id_user === data.creador);
     const otherSubscribers = subscribers.filter(sub => sub.id_user !== data.creador);
 
-    await this.subscribeClients(server, result.data.tipo_sala, principalSubscriber);
-    await this.subscribeClients(server, result.data.tipo_sala, otherSubscribers);
+    await this.subscribeClients(server, result.data.tipo_sala, principalSubscriber, identity);
+    await this.subscribeClients(server, result.data.tipo_sala, otherSubscribers, identity);
   }
 
-  async subscribeClients(server: Server, roomType: number, subscribers: SuscriptoresSalasChat[]) {
+  async subscribeClients(
+    server: Server,
+    roomType: number,
+    subscribers: SuscriptoresSalasChat[],
+    identity?: TokenIdentity,
+  ) {
     if (subscribers.length === 0) return;
 
+    // Los id_user del chat son crudos; se califican para las rooms globales `user:<iss>:<id>`
+    const issuer = identity?.issuer ?? 'repotencia';
     const userIds = subscribers.map(sub => sub.id_user);
-    const connectedClients = await this.socketRegistryService.getUsersSockets(userIds, 'chat');
+    const qualifiedUserIds = userIds.map(userId => this.issuerJwtService.qualifyUserId(issuer, userId));
+    const connectedClients = await this.socketRegistryService.getUsersSockets(qualifiedUserIds, 'chat');
 
     this.subscribeClientsToRoom(server, subscribers[0], connectedClients, roomType);
 
-    // Notificar a TODOS los usuarios usando rooms globales
-    userIds.forEach(userId => {
-      server.to(`user:${userId}`).emit('newSala', { ...subscribers[0], tipo: roomType });
+    // Notificar a cada usuario con SU propia suscripción (nombre/avatar/contador correctos)
+    subscribers.forEach(sub => {
+      const userRoom = `user:${this.issuerJwtService.qualifyUserId(issuer, sub.id_user)}`;
+      server.to(userRoom).emit('newSala', { ...sub, tipo: roomType });
     });
   }
 

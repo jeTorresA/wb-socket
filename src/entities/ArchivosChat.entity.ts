@@ -9,10 +9,10 @@ export class ArchivosChat{
     @Column({length:11, nullable:false})
     nombre:string;
 
-    @Column({length:50, nullable:false})
+    @Column({ type: 'varchar', length: 36, nullable: false })
     id_mensaje:string;
 
-    @Column({length:20})
+    @Column({ type: 'varchar', length: 100, nullable: false })
     id_user:string;
 
     @Column({length:200})

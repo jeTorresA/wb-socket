@@ -15,6 +15,9 @@ import { MigrationInterface, QueryRunner, Table } from "typeorm";
  * a `synchronize` / `migration:generate`.
  *
  * El timestamp es a propósito anterior al de esas migraciones para que corra primero.
+ *
+ * Los createTable se hacen con `ifNotExists` para no fallar en bases donde las tablas
+ * ya existen (creadas por `synchronize`) pero la migración aún no estaba registrada.
  */
 export class CreateChatTables1754000000000 implements MigrationInterface {
 
@@ -30,7 +33,7 @@ export class CreateChatTables1754000000000 implements MigrationInterface {
             indices: [
                 { name: "IDX_52d6de74024c843bd7c0ce7b94", columnNames: ["nombre_sala"], isUnique: true },
             ],
-        }));
+        }), true);
 
         await queryRunner.createTable(new Table({
             name: "user_conected",
@@ -40,7 +43,7 @@ export class CreateChatTables1754000000000 implements MigrationInterface {
                 { name: "userName", type: "varchar", length: "20", isNullable: false },
                 { name: "client", type: "json", isNullable: false },
             ],
-        }));
+        }), true);
 
         await queryRunner.createTable(new Table({
             name: "suscriptores_salas_chat",
@@ -62,7 +65,7 @@ export class CreateChatTables1754000000000 implements MigrationInterface {
                     onUpdate: "CASCADE",
                 },
             ],
-        }));
+        }), true);
 
         await queryRunner.createTable(new Table({
             name: "mensajes_chat",
@@ -98,7 +101,7 @@ export class CreateChatTables1754000000000 implements MigrationInterface {
                     onUpdate: "CASCADE",
                 },
             ],
-        }));
+        }), true);
 
         await queryRunner.createTable(new Table({
             name: "archivos_chat",
@@ -122,7 +125,7 @@ export class CreateChatTables1754000000000 implements MigrationInterface {
                     onUpdate: "CASCADE",
                 },
             ],
-        }));
+        }), true);
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {

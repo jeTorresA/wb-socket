@@ -139,6 +139,11 @@ export class IssuerJwtService implements OnModuleInit {
     };
   }
 
+  /** Califica un id crudo con el emisor dado (para emitir a rooms `user:<iss>:<id>`) */
+  qualifyUserId(issuer: string, userId: string): string {
+    return `${issuer}:${userId}`;
+  }
+
   /** Middleware de handshake de Socket.IO: valida el token y fija la identidad */
   middleware(): (client: Socket, next: (err?: Error) => void) => void {
     return (client: Socket, next: (err?: Error) => void) => {

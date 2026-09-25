@@ -9,7 +9,7 @@ export class SalasChat {
     @Column({ length: 100, unique:true })
     nombre_sala: string
 
-    @Column({ length: 20 })
+    @Column({ type: 'varchar', length: 100 })
     creador: string;
 
     @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', name: 'fecha_creacion' })

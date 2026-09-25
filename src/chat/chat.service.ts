@@ -4,7 +4,7 @@ import { MensajesChat } from 'src/entities/MensajesChat.entity';
 import { SalasChat } from 'src/entities/SalasChat.entity';
 import { SuscriptoresSalasChat } from 'src/entities/SuscriptoresSalasChat.entity';
 import { SocketRegistryService } from 'src/modules/realtime';
-import { MoreThanOrEqual, Repository } from 'typeorm';
+import { IsNull, MoreThanOrEqual, Repository } from 'typeorm';
 import { IMessageSaveStructure, salasChat, suscriptor } from './interfaces/chat/chat.interface';
 
 @Injectable()
@@ -106,6 +106,16 @@ export class ChatService {
             .getRawMany();
     }
 
+    /**
+     * Obtiene las suscripciones activas (con datos completos) de una sala
+     * @param id_sala
+     */
+    async getActiveSubscribers(id_sala: string): Promise<SuscriptoresSalasChat[]> {
+        return await this.suscriptoresChats.find({
+            where: { id_sala, fecha_eliminacion: IsNull() },
+        });
+    }
+
     async createMensaje(mensaje: IMessageSaveStructure): Promise<any> {
         const message = await this.mensajesChatRepository.save(mensaje)
 
@@ -152,12 +162,21 @@ export class ChatService {
     }
 
     async createSala(data: (salasChat & { suscriptores: suscriptor[] })) {
-        const salaValidate = await this.validarSala([data.nombre_sala]).then(async res => {
-            return !!res.length;
-        });
-        if (salaValidate) {
+        const [existingRoom] = await this.validarSala([data.nombre_sala]);
+
+        // Sala 1 a 1 ya existente: se reutiliza en vez de fallar. El cliente puede no tenerla
+        // cargada (p. ej. no llegó 'salaSuscrita' en un intento previo) y si no se reutiliza
+        // el mensaje nunca se envía porque el envío espera el id de la sala.
+        const isGroup = data.tipo === 2;
+        if (existingRoom && !isGroup && existingRoom.tipo !== 2) {
+            const subscribers = await this.ensureSubscribers(existingRoom.id_sala, data.nombre_sala, data.suscriptores);
+            return { type: "response", message: 'Sala existente reutilizada', data: { tipo_sala: existingRoom.tipo, subscribers } };
+        }
+
+        if (existingRoom) {
             return { type: "warning", message: 'esta sala ya esta creada', data: { tipo_sala: null, subscribers: [] } };
         }
+
         const sala = await this.salasSubcritas.save(data).then((resultado) => {
             this.idSala = resultado.id_sala
             return resultado;
@@ -171,6 +190,41 @@ export class ChatService {
         }
 
         return { type: "response", message: 'Creación exitosa', data: { tipo_sala: sala.tipo, subscribers: dataSubs } };
+    }
+
+    /**
+     * Asegura que cada usuario tenga una suscripción activa a la sala indicada:
+     * crea la fila si no existe y restaura las eliminadas lógicamente.
+     */
+    private async ensureSubscribers(id_sala: string, nombre_sala: string, subscribers: suscriptor[] = []) {
+        const result: SuscriptoresSalasChat[] = [];
+
+        for (const susc of subscribers) {
+            const existente = await this.suscriptoresChats.findOne({ where: { id_sala, id_user: susc.id_user } });
+
+            if (existente) {
+                if (existente.fecha_eliminacion) {
+                    await this.suscriptoresChats.createQueryBuilder()
+                        .update()
+                        .set({ fecha_eliminacion: () => 'NULL' })
+                        .where('id_sala = :id_sala AND id_user = :id_user', { id_sala, id_user: susc.id_user })
+                        .execute();
+                    existente.fecha_eliminacion = null;
+                }
+                result.push(existente);
+                continue;
+            }
+
+            result.push(await this.suscriptoresChats.save(this.suscriptoresChats.create({
+                id_user: susc.id_user,
+                id_sala,
+                nombre_sala: susc.nombre_sala || nombre_sala,
+                imagen_sala: susc.imagen_sala || 'unknown.webp',
+                mensajes_por_leer: 0,
+            })));
+        }
+
+        return result;
     }
 
     /**
@@ -240,6 +294,16 @@ export class ChatService {
                         .where('id_sala = :idSala AND id_user = :idUser', { idSala, idUser: s.id_user })
                         .execute();
                 }
+            }
+
+            // Propagar el nombre de la sala a las suscripciones activas (renombrado de grupo)
+            if (data.nombre_sala) {
+                await this.suscriptoresChats.createQueryBuilder()
+                    .update()
+                    .set({ nombre_sala: data.nombre_sala })
+                    .where('id_sala = :idSala', { idSala })
+                    .andWhere('fecha_eliminacion IS NULL')
+                    .execute();
             }
 
             return {

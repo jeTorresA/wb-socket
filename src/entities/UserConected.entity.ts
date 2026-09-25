@@ -5,10 +5,10 @@ export class UserConected{
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({type:"varchar", length:20})
+    @Column({type:"varchar", length:100})
     userId:string;
 
-    @Column({type:"varchar", length:20})
+    @Column({type:"varchar", length:100})
     userName:string;
 
     @Column({type:"varchar", length:100, nullable:true})

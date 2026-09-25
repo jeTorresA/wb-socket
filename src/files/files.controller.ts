@@ -35,8 +35,14 @@ export class FilesController {
                 });
             }
 
-            const folderPath = path.join(process.cwd(), 'public', location)
-            const filePath = path.join(folderPath, fileName);
+            const filePath = this.resolvePublicPath(location, fileName);
+
+            if (!filePath) {
+                return res.status(HttpStatus.BAD_REQUEST).json({
+                    status: false,
+                    message: 'Ruta de archivo inválida.',
+                });
+            }
 
             if (fs.existsSync(filePath)) {
                 res.set({
@@ -64,8 +70,8 @@ export class FilesController {
     @Get('getfile/:directory/:filename')
     getFileStream(@Param('directory') directory: string, @Param('filename') filename: string, @Res() res: Response) {
         try{
-            const filePath = path.join(process.cwd(), 'public', directory, filename);
-            if(!fs.existsSync(filePath)) {
+            const filePath = this.resolvePublicPath(directory, filename);
+            if(!filePath || !fs.existsSync(filePath)) {
                 throw new NotFoundException('El archivo no existe.');
             }
 
@@ -93,9 +99,9 @@ export class FilesController {
         @Res() res: Response
     ) {
         try {
-            const filePath = path.join(process.cwd(), 'public', directory, filename);
+            const filePath = this.resolvePublicPath(directory, filename);
             
-            if (!fs.existsSync(filePath)) {
+            if (!filePath || !fs.existsSync(filePath)) {
                 throw new NotFoundException('El archivo no existe.');
             }
 
@@ -143,9 +149,9 @@ export class FilesController {
                 });
             }
 
-            const filePath = path.join(process.cwd(), 'public', location, fileName);
+            const filePath = this.resolvePublicPath(location, fileName);
             
-            if (!fs.existsSync(filePath)) {
+            if (!filePath || !fs.existsSync(filePath)) {
                 throw new NotFoundException('El archivo no existe.');
             }
 
@@ -176,6 +182,21 @@ export class FilesController {
                 throw new InternalServerErrorException('Ocurrió un error al intentar acceder al archivo');
             }
         }
+    }
+
+    /**
+     * Resuelve una ruta dentro de ./public evitando salir del directorio (path traversal).
+     * Devuelve null si la ruta resultante queda fuera de public.
+     */
+    private resolvePublicPath(location: string, fileName: string): string | null {
+        const publicDir = path.resolve(process.cwd(), 'public');
+        const filePath = path.resolve(publicDir, location ?? '', fileName ?? '');
+
+        if (filePath === publicDir || filePath.startsWith(publicDir + path.sep)) {
+            return filePath;
+        }
+
+        return null;
     }
 
     /**

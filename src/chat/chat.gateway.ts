@@ -100,12 +100,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: Socket,
     @MessageBody() data: salasChat & { suscriptores: suscriptor[] },
   ) {
-    await this.roomsHandler.handleCreateRoom(this.server, client, data);
+    await this.roomsHandler.handleCreateRoom(this.server, client, data, client.data?.identity);
   }
 
   @SubscribeMessage('sendMessage')
   async handleMessage(@ConnectedSocket() client: Socket, @MessageBody() data: mensajes) {
-    await this.messagesHandler.handleSendMessage(this.server, data);
+    await this.messagesHandler.handleSendMessage(this.server, data, client.data?.identity);
   }
 
   @SubscribeMessage('setMessagesAsRead')
@@ -113,7 +113,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { id_sala: string; id_user: string },
   ) {
-    await this.messagesHandler.handleSetMessagesAsRead(this.server, data);
+    await this.messagesHandler.handleSetMessagesAsRead(this.server, data, client.data?.identity);
   }
 
   @SubscribeMessage('getFile')
