@@ -19,18 +19,23 @@ let ChatMessagesHandler = class ChatMessagesHandler {
         this.issuerJwtService = issuerJwtService;
     }
     async handleSendMessage(server, data, identity) {
-        const message = await this.chatService.createMensaje(data);
-        await this.chatService.updateMessagesToRead(data.id_sala, data.id_user);
-        const issuer = identity?.issuer;
-        if (!issuer) {
-            console.warn('MENSAJE SIN IDENTIDAD: no fue posible notificar en tiempo real', { id_sala: data.id_sala });
-            return message;
+        if (!identity) {
+            console.warn('MENSAJE RECHAZADO (socket sin identidad)', { id_sala: data?.id_sala });
+            return;
         }
-        const senderRoom = `user:${this.issuerJwtService.qualifyUserId(issuer, data.id_user)}`;
-        server.to(senderRoom).emit('sentMessage', message);
+        const senderId = identity.userId;
         const roomSubscribers = await this.chatService.getRoomSubscribers(data.id_sala);
+        if (!roomSubscribers.some(sub => sub.id_user === senderId)) {
+            console.warn('MENSAJE RECHAZADO (el emisor no pertenece a la sala)', { id_sala: data.id_sala, id_user: senderId });
+            return;
+        }
+        const message = await this.chatService.createMensaje({ ...data, id_user: senderId });
+        await this.chatService.updateMessagesToRead(data.id_sala, senderId);
+        const issuer = identity.issuer;
+        const senderRoom = `user:${this.issuerJwtService.qualifyUserId(issuer, senderId)}`;
+        server.to(senderRoom).emit('sentMessage', message);
         const subscribersToNotify = roomSubscribers
-            .filter(sub => sub.id_user !== data.id_user)
+            .filter(sub => sub.id_user !== senderId)
             .map(sub => sub.id_user);
         subscribersToNotify.forEach(userId => {
             const subscriberRoom = `user:${this.issuerJwtService.qualifyUserId(issuer, userId)}`;
@@ -39,14 +44,20 @@ let ChatMessagesHandler = class ChatMessagesHandler {
         return message;
     }
     async handleSetMessagesAsRead(server, data, identity) {
-        await this.chatService.updateMessagesAsRead(data.id_sala, data.id_user);
-        const issuer = identity?.issuer;
-        if (!issuer)
+        if (!identity)
             return;
-        const userRoom = `user:${this.issuerJwtService.qualifyUserId(issuer, data.id_user)}`;
-        server.to(userRoom).emit('messagesRead', data);
+        const readerId = identity.userId;
+        await this.chatService.updateMessagesAsRead(data.id_sala, readerId);
+        const userRoom = `user:${this.issuerJwtService.qualifyUserId(identity.issuer, readerId)}`;
+        server.to(userRoom).emit('messagesRead', { id_sala: data.id_sala, id_user: readerId });
     }
     async handleJoinMessages(client, id_sala) {
+        const identity = client.data?.identity;
+        if (!identity || !(await this.chatService.isActiveSubscriber(id_sala, identity.userId))) {
+            console.warn('HISTORIAL RECHAZADO (el usuario no pertenece a la sala)', { id_sala, id_user: identity?.userId });
+            client.emit('mensajesSala', []);
+            return;
+        }
         const messages = await this.chatService.obtenerMensajesSala(id_sala);
         client.emit('mensajesSala', messages);
     }

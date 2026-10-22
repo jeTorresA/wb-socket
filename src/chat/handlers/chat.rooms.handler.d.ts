@@ -9,7 +9,7 @@ export declare class ChatRoomsHandler {
     private readonly issuerJwtService;
     constructor(chatService: ChatService, socketRegistryService: SocketRegistryService, issuerJwtService: IssuerJwtService);
     handleJoinRoom(client: Socket, params: {
-        id_user: string;
+        id_user?: string;
         salasActuales: string[];
     }): Promise<void>;
     handleCreateRoom(server: Server, client: Socket, data: salasChat & {

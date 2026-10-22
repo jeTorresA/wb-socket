@@ -1,7 +1,7 @@
 import { MensajesChat } from 'src/entities/MensajesChat.entity';
 import { SalasChat } from 'src/entities/SalasChat.entity';
 import { SuscriptoresSalasChat } from 'src/entities/SuscriptoresSalasChat.entity';
-import { SocketRegistryService } from 'src/modules/realtime';
+import { SocketRegistryService, TokenIdentity } from 'src/modules/realtime';
 import { Repository } from 'typeorm';
 import { IMessageSaveStructure, salasChat, suscriptor } from './interfaces/chat/chat.interface';
 export declare class ChatService {
@@ -9,7 +9,6 @@ export declare class ChatService {
     private salasSubcritas;
     private suscriptoresChats;
     private socketRegistryService;
-    idSala: any;
     constructor(mensajesChatRepository: Repository<MensajesChat>, salasSubcritas: Repository<SalasChat>, suscriptoresChats: Repository<SuscriptoresSalasChat>, socketRegistryService: SocketRegistryService);
     usersConected(data: {
         userId: string;
@@ -33,16 +32,23 @@ export declare class ChatService {
     updateMessagesAsRead(roomId: string, subscriberId: string): Promise<any>;
     getMessagesToRead(id_sala: string, id_user: string): Promise<any>;
     validarSala(nombre_salas: string[]): Promise<salasChat[]>;
+    isActiveSubscriber(id_sala: string, id_user: string): Promise<boolean>;
+    getRoomAccess(id_sala: string, identity: TokenIdentity): Promise<{
+        sala: SalasChat | null;
+        isMember: boolean;
+        canManage: boolean;
+    }>;
     createSala(data: (salasChat & {
         suscriptores: suscriptor[];
-    })): Promise<{
+    }), creatorId: string, creatorIsAdmin?: boolean): Promise<{
         type: string;
         message: string;
         data: {
-            tipo_sala: number;
+            tipo_sala: any;
             subscribers: any[];
         };
     }>;
+    sanitizeSubscribers(subscribers?: suscriptor[]): suscriptor[];
     private ensureSubscribers;
     updateSubscribers(idSala: string, data: (salasChat & {
         suscriptores: suscriptor[];

@@ -23,24 +23,39 @@ let RoomsController = class RoomsController {
         this.chatService = chatService;
         this.issuerJwtService = issuerJwtService;
     }
-    async handleGetSalas(salaId, res) {
+    async handleGetSalas(salaId, req, res) {
+        const { sala, isMember } = await this.chatService.getRoomAccess(salaId, req.identity);
+        if (!sala)
+            return res.status(common_1.HttpStatus.NOT_FOUND).json({ message: 'El chat no existe.' });
+        if (!isMember)
+            return res.status(common_1.HttpStatus.FORBIDDEN).json({ message: 'No perteneces a este chat.' });
         const subscribers = await this.chatService.getRoomSubscribers(salaId);
         return res.status(common_1.HttpStatus.OK).json(subscribers);
     }
-    async handlePutRoom(idSala, data, res) {
-        if (data.nombre_sala) {
-            const [roomWithName] = await this.chatService.validarSala([data.nombre_sala]);
-            if (roomWithName && roomWithName.id_sala !== idSala) {
-                return res.status(common_1.HttpStatus.CONFLICT).json({ message: 'Ya existe un chat con ese nombre.' });
-            }
+    async handlePutRoom(idSala, data, req, res) {
+        const identity = req.identity;
+        const { sala, canManage } = await this.chatService.getRoomAccess(idSala, identity);
+        if (!sala)
+            return res.status(common_1.HttpStatus.NOT_FOUND).json({ message: 'El chat no existe.' });
+        if (!canManage)
+            return res.status(common_1.HttpStatus.FORBIDDEN).json({ message: 'No tienes permisos para editar este grupo.' });
+        if (sala.tipo !== 2)
+            return res.status(common_1.HttpStatus.BAD_REQUEST).json({ message: 'Solo se pueden editar grupos.' });
+        const nombre_sala = typeof data?.nombre_sala === 'string' ? data.nombre_sala.trim() : '';
+        const suscriptores = this.chatService.sanitizeSubscribers(data?.suscriptores);
+        if (!nombre_sala) {
+            return res.status(common_1.HttpStatus.BAD_REQUEST).json({ message: 'El nombre del grupo es obligatorio.' });
         }
-        const result = await this.chatService.updateSubscribers(idSala, data);
-        const sala = data;
-        delete sala.suscriptores;
-        const _sala = sala;
-        const updatedRoom = await this.chatService.updateRoom(idSala, _sala);
-        const issuer = 'repotencia';
-        const qualify = (id_user) => this.issuerJwtService.qualifyUserId(issuer, id_user);
+        if (!suscriptores.some(s => s.id_user === identity.userId)) {
+            return res.status(common_1.HttpStatus.BAD_REQUEST).json({ message: 'Quien edita el grupo debe seguir siendo miembro.' });
+        }
+        const [roomWithName] = await this.chatService.validarSala([nombre_sala]);
+        if (roomWithName && roomWithName.id_sala !== idSala) {
+            return res.status(common_1.HttpStatus.CONFLICT).json({ message: 'Ya existe un chat con ese nombre.' });
+        }
+        const result = await this.chatService.updateSubscribers(idSala, { ...sala, nombre_sala, suscriptores });
+        const updatedRoom = await this.chatService.updateRoom(idSala, { ...sala, nombre_sala });
+        const qualify = (id_user) => this.issuerJwtService.qualifyUserId(identity.issuer, id_user);
         const activeSubscribers = await this.chatService.getActiveSubscribers(idSala);
         if (activeSubscribers.length > 0) {
             await this.chatGateway.verifyConnectedClients(updatedRoom.tipo, activeSubscribers);
@@ -53,12 +68,18 @@ let RoomsController = class RoomsController {
         }
         return res.status(common_1.HttpStatus.OK).json('Chat y suscriptores actualizados con éxito.');
     }
-    async handleDeleteRoom(idSala, res) {
+    async handleDeleteRoom(idSala, req, res) {
+        const identity = req.identity;
+        const { sala, canManage } = await this.chatService.getRoomAccess(idSala, identity);
+        if (!sala)
+            return res.status(common_1.HttpStatus.NOT_FOUND).json({ message: 'El chat no existe.' });
+        if (!canManage)
+            return res.status(common_1.HttpStatus.FORBIDDEN).json({ message: 'No tienes permisos para eliminar este chat.' });
         try {
             const result = await this.chatService.deleteRoom(idSala);
             if (result.suscriptores && result.suscriptores.length > 0) {
                 result.suscriptores.forEach(subscriber => {
-                    this.chatGateway.emitToUser(this.issuerJwtService.qualifyUserId('repotencia', subscriber.id_user), 'salaEliminada', { id_sala: idSala });
+                    this.chatGateway.emitToUser(this.issuerJwtService.qualifyUserId(identity.issuer, subscriber.id_user), 'salaEliminada', { id_sala: idSala });
                 });
             }
             return res.status(common_1.HttpStatus.OK).json({
@@ -77,30 +98,34 @@ exports.RoomsController = RoomsController;
 __decorate([
     (0, common_1.Get)(':id/subscribers'),
     __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Res)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", Promise)
 ], RoomsController.prototype, "handleGetSalas", null);
 __decorate([
     (0, common_1.Put)(':id'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
-    __param(2, (0, common_1.Res)()),
+    __param(2, (0, common_1.Req)()),
+    __param(3, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:paramtypes", [String, Object, Object, Object]),
     __metadata("design:returntype", Promise)
 ], RoomsController.prototype, "handlePutRoom", null);
 __decorate([
     (0, common_1.Delete)(':id'),
     __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Res)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", Promise)
 ], RoomsController.prototype, "handleDeleteRoom", null);
 exports.RoomsController = RoomsController = __decorate([
     (0, common_1.Controller)('api/room'),
+    (0, common_1.UseGuards)(realtime_1.UserJwtGuard),
     __metadata("design:paramtypes", [chat_gateway_1.ChatGateway,
         chat_service_1.ChatService,
         realtime_1.IssuerJwtService])

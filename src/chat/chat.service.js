@@ -123,26 +123,74 @@ let ChatService = class ChatService {
             .where('salas.nombre_sala IN (:...nombre_salas)', { nombre_salas: nombre_salas })
             .getMany();
     }
-    async createSala(data) {
-        const [existingRoom] = await this.validarSala([data.nombre_sala]);
+    async isActiveSubscriber(id_sala, id_user) {
+        if (!id_sala || !id_user)
+            return false;
+        return (await this.suscriptoresChats.count({ where: { id_sala, id_user, fecha_eliminacion: (0, typeorm_2.IsNull)() } })) > 0;
+    }
+    async getRoomAccess(id_sala, identity) {
+        const sala = id_sala ? await this.salasSubcritas.findOne({ where: { id_sala } }) : null;
+        if (!sala)
+            return { sala: null, isMember: false, canManage: false };
+        const isMember = await this.isActiveSubscriber(id_sala, identity.userId);
+        const isGroup = sala.tipo === 2;
+        const canManage = isMember && (!isGroup || sala.creador === identity.userId || !!identity.isAdmin);
+        return { sala, isMember, canManage };
+    }
+    async createSala(data, creatorId, creatorIsAdmin = false) {
+        const rejected = (message) => ({ type: "warning", message, data: { tipo_sala: null, subscribers: [] } });
+        const nombre_sala = typeof data?.nombre_sala === 'string' ? data.nombre_sala.trim() : '';
+        if (!nombre_sala)
+            return rejected('El nombre de la sala es obligatorio');
         const isGroup = data.tipo === 2;
+        if (isGroup && !creatorIsAdmin)
+            return rejected('Solo un administrador puede crear grupos');
+        const suscriptores = this.sanitizeSubscribers(data.suscriptores);
+        if (!suscriptores.some(susc => susc.id_user === creatorId)) {
+            return rejected('El creador debe pertenecer a la sala');
+        }
+        if (!isGroup && suscriptores.length !== 2) {
+            return rejected('Un chat directo debe tener exactamente dos participantes');
+        }
+        const [existingRoom] = await this.validarSala([nombre_sala]);
         if (existingRoom && !isGroup && existingRoom.tipo !== 2) {
-            const subscribers = await this.ensureSubscribers(existingRoom.id_sala, data.nombre_sala, data.suscriptores);
+            const participantes = await this.suscriptoresChats.find({ where: { id_sala: existingRoom.id_sala } });
+            const idsParticipantes = new Set(participantes.map(p => p.id_user));
+            if (!idsParticipantes.has(creatorId)) {
+                return rejected('esta sala ya esta creada');
+            }
+            const subscribers = await this.ensureSubscribers(existingRoom.id_sala, nombre_sala, suscriptores.filter(susc => idsParticipantes.has(susc.id_user)));
             return { type: "response", message: 'Sala existente reutilizada', data: { tipo_sala: existingRoom.tipo, subscribers } };
         }
         if (existingRoom) {
-            return { type: "warning", message: 'esta sala ya esta creada', data: { tipo_sala: null, subscribers: [] } };
+            return rejected('esta sala ya esta creada');
         }
-        const sala = await this.salasSubcritas.save(data).then((resultado) => {
-            this.idSala = resultado.id_sala;
-            return resultado;
-        });
-        let dataSubs = [];
-        if (data.suscriptores.length) {
-            const subs = data.suscriptores.map((susc) => ({ ...susc, id_sala: this.idSala, id_suscriptor: susc.id_user, mensajes_por_leer: 0 }));
-            dataSubs = await this.createSubscriptor(subs);
-        }
+        const sala = await this.salasSubcritas.save(this.salasSubcritas.create({
+            nombre_sala,
+            creador: creatorId,
+            tipo: isGroup ? 2 : 1,
+        }));
+        const subs = suscriptores.map(susc => ({ ...susc, id_sala: sala.id_sala, id_suscriptor: susc.id_user, mensajes_por_leer: 0 }));
+        const dataSubs = await this.createSubscriptor(subs);
         return { type: "response", message: 'Creación exitosa', data: { tipo_sala: sala.tipo, subscribers: dataSubs } };
+    }
+    sanitizeSubscribers(subscribers = []) {
+        const vistos = new Set();
+        const result = [];
+        for (const susc of Array.isArray(subscribers) ? subscribers : []) {
+            const id_user = susc?.id_user != null ? String(susc.id_user) : '';
+            if (!id_user || vistos.has(id_user))
+                continue;
+            vistos.add(id_user);
+            result.push({
+                id_user,
+                id_sala: '',
+                nombre_sala: typeof susc.nombre_sala === 'string' ? susc.nombre_sala : '',
+                imagen_sala: typeof susc.imagen_sala === 'string' ? susc.imagen_sala : 'unknown.webp',
+                fecha_suscripcion: new Date(),
+            });
+        }
+        return result;
     }
     async ensureSubscribers(id_sala, nombre_sala, subscribers = []) {
         const result = [];
@@ -249,8 +297,6 @@ let ChatService = class ChatService {
         }
         if (data.nombre_sala !== undefined)
             sala.nombre_sala = data.nombre_sala;
-        if (data.creador !== undefined)
-            sala.creador = data.creador;
         return await this.salasSubcritas.save(sala);
     }
     async deleteRoom(idSala) {

@@ -80,10 +80,14 @@ let IssuerJwtService = class IssuerJwtService {
                 console.warn(`TOKEN VÁLIDO PERO SIN ${issuer.idClaim} EN EL EMISOR "${issuer.iss}"`);
                 continue;
             }
+            const adminValue = issuer.adminClaim ? getPath(payload, issuer.adminClaim) : undefined;
+            const isAdmin = adminValue !== undefined && adminValue !== null
+                && (issuer.adminValues ?? []).map(String).includes(String(adminValue));
             return {
                 issuer: issuer.iss,
                 userId: String(userId),
                 userName: String(getPath(payload, issuer.nameClaim) ?? userId),
+                isAdmin,
             };
         }
         return null;

@@ -7,11 +7,14 @@ export interface IssuerConfig {
     secret?: string;
     idClaim: string;
     nameClaim: string;
+    adminClaim?: string;
+    adminValues?: (string | number)[];
 }
 export interface TokenIdentity {
     issuer: string;
     userId: string;
     userName: string;
+    isAdmin?: boolean;
 }
 export declare class IssuerJwtService implements OnModuleInit {
     private issuers;

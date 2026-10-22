@@ -22,5 +22,6 @@ __exportStar(require("./services/issuer-jwt.service"), exports);
 __exportStar(require("./providers/socket-server.provider"), exports);
 __exportStar(require("./controllers/events.controller"), exports);
 __exportStar(require("./guards/service-auth.guard"), exports);
+__exportStar(require("./guards/user-jwt.guard"), exports);
 __exportStar(require("./shared/base.gateway"), exports);
 //# sourceMappingURL=index.js.map

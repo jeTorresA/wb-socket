@@ -9,7 +9,7 @@ export declare class ChatMessagesHandler {
     handleSendMessage(server: Server, data: mensajes, identity?: TokenIdentity): Promise<any>;
     handleSetMessagesAsRead(server: Server, data: {
         id_sala: string;
-        id_user: string;
+        id_user?: string;
     }, identity?: TokenIdentity): Promise<void>;
     handleJoinMessages(client: any, id_sala: string): Promise<void>;
 }

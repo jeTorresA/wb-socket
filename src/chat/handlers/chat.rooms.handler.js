@@ -20,7 +20,10 @@ let ChatRoomsHandler = class ChatRoomsHandler {
         this.issuerJwtService = issuerJwtService;
     }
     async handleJoinRoom(client, params) {
-        const salasSuscritas = await this.chatService.obtenerSalasSuscritas(params.id_user, params.salasActuales);
+        const identity = client.data?.identity;
+        if (!identity)
+            return;
+        const salasSuscritas = await this.chatService.obtenerSalasSuscritas(identity.userId, params?.salasActuales ?? []);
         if (salasSuscritas.length > 0) {
             salasSuscritas.forEach(data => {
                 client.join(data.salas.nombre_sala);
@@ -30,14 +33,19 @@ let ChatRoomsHandler = class ChatRoomsHandler {
         }
     }
     async handleCreateRoom(server, client, data, identity) {
-        const result = await this.chatService.createSala(data);
+        if (!identity) {
+            client.emit('advertencia', 'No fue posible identificar al usuario');
+            return;
+        }
+        const creatorId = identity.userId;
+        const result = await this.chatService.createSala(data, creatorId, !!identity.isAdmin);
         if (result.type === 'warning') {
             client.emit('advertencia', result.message);
             return;
         }
         const subscribers = result.data.subscribers;
-        const principalSubscriber = subscribers.filter(sub => sub.id_user === data.creador);
-        const otherSubscribers = subscribers.filter(sub => sub.id_user !== data.creador);
+        const principalSubscriber = subscribers.filter(sub => sub.id_user === creatorId);
+        const otherSubscribers = subscribers.filter(sub => sub.id_user !== creatorId);
         await this.subscribeClients(server, result.data.tipo_sala, principalSubscriber, identity);
         await this.subscribeClients(server, result.data.tipo_sala, otherSubscribers, identity);
     }
