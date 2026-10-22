@@ -19,6 +19,10 @@ export interface IssuerConfig {
   idClaim: string;
   /** JSON path del claim con el nombre de usuario */
   nameClaim: string;
+  /** (Opcional) JSON path del claim que determina si el usuario es administrador (ej: "user.perfil.id_perfil_usuario") */
+  adminClaim?: string;
+  /** (Opcional) Valores de `adminClaim` que corresponden a un administrador (ej: [31]) */
+  adminValues?: (string | number)[];
 }
 
 /** Identidad unificada derivada SIEMPRE del payload firmado del token */
@@ -26,6 +30,8 @@ export interface TokenIdentity {
   issuer: string;
   userId: string;
   userName: string;
+  /** true si el emisor declara `adminClaim`/`adminValues` y el token cumple la condición */
+  isAdmin?: boolean;
 }
 
 /** Extrae un valor de un objeto por ruta de puntos (ej: "user.id_usuario") */
@@ -121,10 +127,15 @@ export class IssuerJwtService implements OnModuleInit {
         continue;
       }
 
+      const adminValue = issuer.adminClaim ? getPath(payload, issuer.adminClaim) : undefined;
+      const isAdmin = adminValue !== undefined && adminValue !== null
+        && (issuer.adminValues ?? []).map(String).includes(String(adminValue));
+
       return {
         issuer: issuer.iss,
         userId: String(userId),
         userName: String(getPath(payload, issuer.nameClaim) ?? userId),
+        isAdmin,
       };
     }
 

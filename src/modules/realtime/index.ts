@@ -6,4 +6,5 @@ export * from './services/issuer-jwt.service';
 export * from './providers/socket-server.provider';
 export * from './controllers/events.controller';
 export * from './guards/service-auth.guard';
+export * from './guards/user-jwt.guard';
 export * from './shared/base.gateway';

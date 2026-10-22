@@ -16,10 +16,20 @@ export class ChatRoomsHandler {
     private readonly issuerJwtService: IssuerJwtService,
   ) {}
 
-  async handleJoinRoom(client: Socket, params: { id_user: string; salasActuales: string[] }) {
+  /**
+   * Devuelve las salas suscritas del usuario del token y une el socket a ellas.
+   * El usuario se toma SIEMPRE del token firmado del socket (no del payload), para que un cliente
+   * no pueda consultar las salas de otro usuario.
+   * @param client Socket del cliente (con la identidad fijada en el handshake).
+   * @param params Salas que el cliente ya conoce (el id_user del payload se ignora).
+   */
+  async handleJoinRoom(client: Socket, params: { id_user?: string; salasActuales: string[] }) {
+    const identity: TokenIdentity | undefined = client.data?.identity;
+    if (!identity) return;
+
     const salasSuscritas = await this.chatService.obtenerSalasSuscritas(
-      params.id_user,
-      params.salasActuales,
+      identity.userId,
+      params?.salasActuales ?? [],
     );
 
     if (salasSuscritas.length > 0) {
@@ -31,13 +41,27 @@ export class ChatRoomsHandler {
     }
   }
 
+  /**
+   * Crea una sala (o reutiliza un chat 1 a 1) y notifica a sus participantes.
+   * El creador es SIEMPRE el usuario del token firmado del socket (el `creador` del payload se ignora).
+   * @param server Servidor del namespace /chat.
+   * @param client Socket del cliente que crea la sala.
+   * @param data Datos de la sala y suscriptores enviados por el cliente.
+   * @param identity Identidad derivada del token en el handshake.
+   */
   async handleCreateRoom(
     server: Server,
     client: Socket,
     data: salasChat & { suscriptores: suscriptor[] },
     identity?: TokenIdentity,
   ) {
-    const result = await this.chatService.createSala(data);
+    if (!identity) {
+      client.emit('advertencia', 'No fue posible identificar al usuario');
+      return;
+    }
+
+    const creatorId = identity.userId;
+    const result = await this.chatService.createSala(data, creatorId, !!identity.isAdmin);
 
     if (result.type === 'warning') {
       client.emit('advertencia', result.message);
@@ -45,8 +69,8 @@ export class ChatRoomsHandler {
     }
 
     const subscribers = result.data.subscribers as SuscriptoresSalasChat[];
-    const principalSubscriber = subscribers.filter(sub => sub.id_user === data.creador);
-    const otherSubscribers = subscribers.filter(sub => sub.id_user !== data.creador);
+    const principalSubscriber = subscribers.filter(sub => sub.id_user === creatorId);
+    const otherSubscribers = subscribers.filter(sub => sub.id_user !== creatorId);
 
     await this.subscribeClients(server, result.data.tipo_sala, principalSubscriber, identity);
     await this.subscribeClients(server, result.data.tipo_sala, otherSubscribers, identity);

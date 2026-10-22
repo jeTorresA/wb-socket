@@ -157,7 +157,7 @@ gateway.unsubscribeClientsFromRoom(room, clients, roomType);
 
 ### Archivos de Backup
 Los archivos originales se respaldaron:
-- `chat.gateway.backup.ts`
+- `chat.gateway.backup.ts` (eliminado: no se usaba y conservaba la implementación sin validación de identidad; queda en el historial de git)
 - `chat.module.backup.ts`
 
 ### Pasos Realizados

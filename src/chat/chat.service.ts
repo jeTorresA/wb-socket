@@ -3,13 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { MensajesChat } from 'src/entities/MensajesChat.entity';
 import { SalasChat } from 'src/entities/SalasChat.entity';
 import { SuscriptoresSalasChat } from 'src/entities/SuscriptoresSalasChat.entity';
-import { SocketRegistryService } from 'src/modules/realtime';
+import { SocketRegistryService, TokenIdentity } from 'src/modules/realtime';
 import { IsNull, MoreThanOrEqual, Repository } from 'typeorm';
 import { IMessageSaveStructure, salasChat, suscriptor } from './interfaces/chat/chat.interface';
 
 @Injectable()
 export class ChatService {
-    idSala: any;
     constructor(
         @InjectRepository(MensajesChat)
         private mensajesChatRepository: Repository<MensajesChat>,
@@ -161,35 +160,126 @@ export class ChatService {
             .getMany();
     }
 
-    async createSala(data: (salasChat & { suscriptores: suscriptor[] })) {
-        const [existingRoom] = await this.validarSala([data.nombre_sala]);
+    /**
+     * Indica si un usuario tiene una suscripción activa a la sala.
+     * @param id_sala Id de la sala.
+     * @param id_user Id (crudo) del usuario.
+     */
+    async isActiveSubscriber(id_sala: string, id_user: string): Promise<boolean> {
+        if (!id_sala || !id_user) return false;
+        return (await this.suscriptoresChats.count({ where: { id_sala, id_user, fecha_eliminacion: IsNull() } })) > 0;
+    }
+
+    /**
+     * Determina los permisos de un usuario sobre una sala.
+     * - Miembro: tiene suscripción activa.
+     * - Puede administrar (editar/eliminar): es miembro y, si la sala es un grupo, además es su
+     *   creador o administrador según su token. En un chat directo basta con participar.
+     * @param id_sala Id de la sala.
+     * @param identity Identidad del usuario autenticado.
+     * @returns La sala (null si no existe) y los permisos del usuario.
+     * @example const { sala, canManage } = await chatService.getRoomAccess(id, req.identity);
+     */
+    async getRoomAccess(id_sala: string, identity: TokenIdentity): Promise<{ sala: SalasChat | null; isMember: boolean; canManage: boolean }> {
+        const sala = id_sala ? await this.salasSubcritas.findOne({ where: { id_sala } }) : null;
+        if (!sala) return { sala: null, isMember: false, canManage: false };
+
+        const isMember = await this.isActiveSubscriber(id_sala, identity.userId);
+        const isGroup = sala.tipo === 2;
+        const canManage = isMember && (!isGroup || sala.creador === identity.userId || !!identity.isAdmin);
+
+        return { sala, isMember, canManage };
+    }
+
+    /**
+     * Crea una sala (o reutiliza un chat 1 a 1 existente) con sus suscriptores.
+     * Solo se toman del cliente los campos permitidos; el creador es el usuario del token y debe
+     * estar entre los suscriptores. Un chat 1 a 1 tiene exactamente dos participantes.
+     * @param data Datos de la sala enviados por el cliente (creador e ids de sala se ignoran).
+     * @param creatorId Id (crudo) del usuario autenticado que crea la sala.
+     * @param creatorIsAdmin Si el creador es administrador (requerido para crear grupos).
+     * @example createSala({ nombre_sala: 'ana_juan', suscriptores: [...] }, '1007507657')
+     */
+    async createSala(data: (salasChat & { suscriptores: suscriptor[] }), creatorId: string, creatorIsAdmin = false) {
+        const rejected = (message: string) => ({ type: "warning", message, data: { tipo_sala: null, subscribers: [] } });
+
+        const nombre_sala = typeof data?.nombre_sala === 'string' ? data.nombre_sala.trim() : '';
+        if (!nombre_sala) return rejected('El nombre de la sala es obligatorio');
+
+        const isGroup = data.tipo === 2;
+        if (isGroup && !creatorIsAdmin) return rejected('Solo un administrador puede crear grupos');
+        const suscriptores = this.sanitizeSubscribers(data.suscriptores);
+
+        if (!suscriptores.some(susc => susc.id_user === creatorId)) {
+            return rejected('El creador debe pertenecer a la sala');
+        }
+        if (!isGroup && suscriptores.length !== 2) {
+            return rejected('Un chat directo debe tener exactamente dos participantes');
+        }
+
+        const [existingRoom] = await this.validarSala([nombre_sala]);
 
         // Sala 1 a 1 ya existente: se reutiliza en vez de fallar. El cliente puede no tenerla
         // cargada (p. ej. no llegó 'salaSuscrita' en un intento previo) y si no se reutiliza
         // el mensaje nunca se envía porque el envío espera el id de la sala.
-        const isGroup = data.tipo === 2;
+        // Solo la puede reutilizar quien ya participa en ella, y solo se restauran participantes
+        // existentes: conocer el nombre de un chat ajeno no da acceso a él.
         if (existingRoom && !isGroup && existingRoom.tipo !== 2) {
-            const subscribers = await this.ensureSubscribers(existingRoom.id_sala, data.nombre_sala, data.suscriptores);
+            const participantes = await this.suscriptoresChats.find({ where: { id_sala: existingRoom.id_sala } });
+            const idsParticipantes = new Set(participantes.map(p => p.id_user));
+
+            if (!idsParticipantes.has(creatorId)) {
+                return rejected('esta sala ya esta creada');
+            }
+
+            const subscribers = await this.ensureSubscribers(
+                existingRoom.id_sala,
+                nombre_sala,
+                suscriptores.filter(susc => idsParticipantes.has(susc.id_user)),
+            );
             return { type: "response", message: 'Sala existente reutilizada', data: { tipo_sala: existingRoom.tipo, subscribers } };
         }
 
         if (existingRoom) {
-            return { type: "warning", message: 'esta sala ya esta creada', data: { tipo_sala: null, subscribers: [] } };
+            return rejected('esta sala ya esta creada');
         }
 
-        const sala = await this.salasSubcritas.save(data).then((resultado) => {
-            this.idSala = resultado.id_sala
-            return resultado;
-        });
+        const sala = await this.salasSubcritas.save(this.salasSubcritas.create({
+            nombre_sala,
+            creador: creatorId,
+            tipo: isGroup ? 2 : 1,
+        }));
 
-        let dataSubs = [];
-
-        if (data.suscriptores.length) {
-            const subs = data.suscriptores.map((susc: suscriptor) => ({ ...susc, id_sala: this.idSala, id_suscriptor: susc.id_user, mensajes_por_leer: 0 }));
-            dataSubs = await this.createSubscriptor(subs);
-        }
+        const subs = suscriptores.map(susc => ({ ...susc, id_sala: sala.id_sala, id_suscriptor: susc.id_user, mensajes_por_leer: 0 }));
+        const dataSubs = await this.createSubscriptor(subs);
 
         return { type: "response", message: 'Creación exitosa', data: { tipo_sala: sala.tipo, subscribers: dataSubs } };
+    }
+
+    /**
+     * Normaliza los suscriptores enviados por el cliente: conserva solo los campos permitidos
+     * y elimina ids vacíos o repetidos.
+     * @param subscribers Suscriptores tal como llegan en el payload.
+     */
+    sanitizeSubscribers(subscribers: suscriptor[] = []): suscriptor[] {
+        const vistos = new Set<string>();
+        const result: suscriptor[] = [];
+
+        for (const susc of Array.isArray(subscribers) ? subscribers : []) {
+            const id_user = susc?.id_user != null ? String(susc.id_user) : '';
+            if (!id_user || vistos.has(id_user)) continue;
+            vistos.add(id_user);
+
+            result.push({
+                id_user,
+                id_sala: '',
+                nombre_sala: typeof susc.nombre_sala === 'string' ? susc.nombre_sala : '',
+                imagen_sala: typeof susc.imagen_sala === 'string' ? susc.imagen_sala : 'unknown.webp',
+                fecha_suscripcion: new Date(),
+            });
+        }
+
+        return result;
     }
 
     /**
@@ -336,9 +426,8 @@ export class ChatService {
             throw new NotFoundException(`No se encontró la sala con id: ${idSala}`);
         }
 
-        // Actualizamos campos permitidos (sin tocar fecha_creacion)
+        // Solo el nombre es editable: creador, tipo y fecha_creacion no se modifican desde el cliente
         if (data.nombre_sala !== undefined) sala.nombre_sala = data.nombre_sala;
-        if (data.creador !== undefined) sala.creador = data.creador;
 
         // Guardamos los cambios
         return await this.salasSubcritas.save(sala);
