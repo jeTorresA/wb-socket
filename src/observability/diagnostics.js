@@ -14,7 +14,7 @@ const env = (name, def) => {
     const v = Number(process.env[name]);
     return Number.isFinite(v) && v > 0 ? v : def;
 };
-const INTERVAL_MS = env('DIAG_INTERVAL_MS', 60000);
+const INTERVAL_MS = env('DIAG_INTERVAL_MS', 300000);
 const SLOW_MS = env('DIAG_SLOW_MS', 5000);
 const LAG_WARN_MS = env('DIAG_LAG_WARN_MS', 500);
 const LOG_ALL = process.env.DIAG_LOG_ALL_REQUESTS === 'true';

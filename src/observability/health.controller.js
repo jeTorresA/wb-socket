@@ -23,11 +23,15 @@ let HealthController = class HealthController {
         this.dataSource = dataSource;
         this.socketServerProvider = socketServerProvider;
     }
-    io() {
-        return this.socketServerProvider.isInitialized() ? this.socketServerProvider.getServer() : undefined;
+    snapshot() {
+        const io = this.socketServerProvider.isInitialized() ? this.socketServerProvider.getServer() : undefined;
+        return (0, diagnostics_1.runtimeSnapshot)({ dataSource: this.dataSource, io });
     }
     live() {
-        return { status: 'ok', ...(0, diagnostics_1.runtimeSnapshot)({ dataSource: this.dataSource, io: this.io() }) };
+        return { status: 'ok' };
+    }
+    details() {
+        return { status: 'ok', ...this.snapshot() };
     }
     async db(res) {
         const start = Date.now();
@@ -39,18 +43,14 @@ let HealthController = class HealthController {
                     timer = setTimeout(() => reject(new Error(`timeout ${DB_CHECK_TIMEOUT_MS}ms`)), DB_CHECK_TIMEOUT_MS);
                 }),
             ]);
-            res.status(common_1.HttpStatus.OK).json({
-                status: 'ok',
-                latencyMs: Date.now() - start,
-                ...(0, diagnostics_1.runtimeSnapshot)({ dataSource: this.dataSource, io: this.io() }),
-            });
+            res.status(common_1.HttpStatus.OK).json({ status: 'ok', latencyMs: Date.now() - start, ...this.snapshot() });
         }
         catch (error) {
             res.status(common_1.HttpStatus.SERVICE_UNAVAILABLE).json({
                 status: 'error',
                 error: error?.message ?? String(error),
                 latencyMs: Date.now() - start,
-                ...(0, diagnostics_1.runtimeSnapshot)({ dataSource: this.dataSource, io: this.io() }),
+                ...this.snapshot(),
             });
         }
         finally {
@@ -66,7 +66,15 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], HealthController.prototype, "live", null);
 __decorate([
+    (0, common_1.Get)('details'),
+    (0, common_1.UseGuards)(realtime_1.ServiceAuthGuard),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", void 0)
+], HealthController.prototype, "details", null);
+__decorate([
     (0, common_1.Get)('db'),
+    (0, common_1.UseGuards)(realtime_1.ServiceAuthGuard),
     __param(0, (0, common_1.Res)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

@@ -5,8 +5,11 @@ export declare class HealthController {
     private readonly dataSource;
     private readonly socketServerProvider;
     constructor(dataSource: DataSource, socketServerProvider: SocketServerProvider);
-    private io;
+    private snapshot;
     live(): {
+        status: string;
+    };
+    details(): {
         pid: number;
         uptimeSec: number;
         node: string;

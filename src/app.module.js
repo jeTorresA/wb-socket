@@ -38,7 +38,7 @@ exports.AppModule = AppModule = __decorate([
                 ...data_source_1.dataBaseOptions,
                 synchronize: process.env.NODE_ENV === 'development',
                 autoLoadEntities: process.env.NODE_ENV === 'development',
-                logging: ['error', 'warn'],
+                logging: ['warn'],
                 maxQueryExecutionTime: Number(process.env.DB_SLOW_QUERY_MS ?? 2000),
             }),
             platform_express_1.MulterModule.register({
