@@ -22,6 +22,7 @@ const path_1 = require("path");
 const api_controller_1 = require("./api/api.controller");
 const data_source_1 = require("../db/data-source");
 const rooms_controller_1 = require("./api/rooms.controller");
+const health_controller_1 = require("./observability/health.controller");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -37,13 +38,15 @@ exports.AppModule = AppModule = __decorate([
                 ...data_source_1.dataBaseOptions,
                 synchronize: process.env.NODE_ENV === 'development',
                 autoLoadEntities: process.env.NODE_ENV === 'development',
+                logging: ['error', 'warn'],
+                maxQueryExecutionTime: Number(process.env.DB_SLOW_QUERY_MS ?? 2000),
             }),
             platform_express_1.MulterModule.register({
                 dest: '../public/uploads',
             }),
             serve_static_1.ServeStaticModule.forRoot({ rootPath: (0, path_1.join)(process.cwd(), 'client'), }),
         ],
-        controllers: [app_controller_1.AppController, api_controller_1.ApiController, rooms_controller_1.RoomsController],
+        controllers: [app_controller_1.AppController, api_controller_1.ApiController, rooms_controller_1.RoomsController, health_controller_1.HealthController],
         providers: [app_service_1.AppService],
     })
 ], AppModule);

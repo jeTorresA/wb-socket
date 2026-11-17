@@ -11,6 +11,7 @@ module.exports = {
             watch: false,
             ignore_watch: ['public/uploads', 'node_modules'],
             kill_timeout: 5000,
+            time: true,
             listen_timeout: 10000,
             env_development: {
                 NODE_ENV: 'development',
